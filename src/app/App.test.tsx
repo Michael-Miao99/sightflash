@@ -27,7 +27,7 @@ describe('AppRoot', () => {
     expect(await screen.findByTestId('staff')).toBeInTheDocument();
   });
 
-  it('数据页与设置页可打开', async () => {
+  it('数据页可打开（空态文案）', async () => {
     render(<AppRoot repoKind="memory" />);
     await screen.findByText(/五线速读/);
     await userEvent.click(screen.getByRole('button', { name: /数据/ }));
