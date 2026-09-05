@@ -58,6 +58,24 @@ export function answerTap(s: Session, guessedPc: number): Session {
   return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
 }
 
+/**
+ * 琴键作答（pure）：按精确 MIDI 判定（八度必须一致）。
+ * 对则推进下一题；错则题目停留便于重试。与 answerTap 同构，仅判定粒度不同。
+ */
+export function answerKey(s: Session, midi: number): Session {
+  const expectedPc = s.target.midi % 12;
+  const ok = midi === s.target.midi;
+  const item: HistoryItem = {
+    result: ok ? 'correct' : 'wrong',
+    expectedMidi: s.target.midi,
+    expectedPc,
+    actualPc: midi % 12,
+  };
+  const history = [item, ...s.history];
+  const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi) : s.target;
+  return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
+}
+
 export interface WrongDeltas {
   /** 本轮仍未解决的错音 MIDI：需 registerMistake（加深） */
   toLearn: number[];

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createSession, answerTap, computeWrongDeltas } from './session';
+import { createSession, answerTap, answerKey, computeWrongDeltas } from './session';
+import type { Session } from './session';
 import { mulberry32 } from './generator/generator';
 import { LETTER_PC } from './notation/note';
 
@@ -44,5 +45,50 @@ describe('session 会话状态机', () => {
     const d = computeWrongDeltas(hist);
     expect(d.toLearn).toEqual([60]); // C4 结束仍错 → 加深
     expect(d.recalled).toEqual([60, 67]); // C4/G4 本轮都答对过 → 出池
+  });
+});
+
+function makeSession(targetMidi: number): Session {
+  return {
+    stage: 1,
+    clef: 'treble',
+    durationSec: 60,
+    rng: () => 0.5,
+    wrong: {},
+    target: { midi: targetMidi, clef: 'treble' },
+    correct: 0,
+    total: 0,
+    history: [],
+    last: null,
+  };
+}
+
+describe('answerKey 精确八度作答', () => {
+  it('点到同一 MIDI 判对：计入正确、推进下一题', () => {
+    const s = makeSession(60); // C4
+    const next = answerKey(s, 60);
+    expect(next.last?.result).toBe('correct');
+    expect(next.correct).toBe(1);
+    expect(next.total).toBe(1);
+    expect(next.history[0]).toMatchObject({ expectedMidi: 60, actualPc: 0 });
+    expect(next.target).not.toBe(s.target); // 推进到新题
+  });
+
+  it('同音名错八度（C5=72）判错：题目停留可重试', () => {
+    const s = makeSession(60);
+    const next = answerKey(s, 72);
+    expect(next.last?.result).toBe('wrong');
+    expect(next.correct).toBe(0);
+    expect(next.total).toBe(1);
+    expect(next.history[0].actualPc).toBe(0);
+    expect(next.target).toBe(s.target); // 未推进
+  });
+
+  it('点黑键（如 C#4=61）对自然音目标恒判错', () => {
+    const s = makeSession(62); // D4 自然音
+    const next = answerKey(s, 61); // C#4
+    expect(next.last?.result).toBe('wrong');
+    expect(next.correct).toBe(0);
+    expect(next.history[0].actualPc).toBe(1);
   });
 });
