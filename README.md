@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# 五线速读 SightFlash
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+把「五线谱 ↔ 音名 ↔ 琴键」练成条件反射的识谱反应训练器（PWA，手机可用）。
 
-Currently, two official plugins are available:
+## 里程碑 A（当前）：认音模式
+看谱 → 点音名按钮。难度阶梯 S1~S5、错音加权复习、打卡/连击、速度/准确率曲线、本地数据（IndexedDB）。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+里程碑 B（规划中）：跟弹模式 —— 麦克风音高判定（真琴弹奏）。
+设计文档：`docs/superpowers/specs/2026-09-05-sightflash-design.md`
 
-## React Compiler
+## 开发
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev        # localhost
+npm test           # vitest 全量
+npm run build      # 产出 dist/（PWA）
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 真机验收清单（里程碑 A）
+- [ ] 手机浏览器打开 https 页面（认音模式无需麦克风）
+- [ ] 首页 → 开始训练 → 选高音谱 → 练一轮：谱面渲染正确、点音名判对/错、到点自动结算
+- [ ] 答错后「常错音符」出现该音；重复练到准确率 ≥85% 自动升 S2（低音谱解锁）
+- [ ] 混合模式（S3 后）：同一题明确显示高音或低音谱
+- [ ] 今日目标随正确数累加、跨天清零；连续天数正确累计
+- [ ] 「添加到主屏幕」安装为 PWA；断网重开仍可用、数据不丢
+- [ ] 数据页速度曲线 / 错音分布与练习记录一致
+
+## 里程碑 B 接入点
+- `src/core/generator`（chooseQuestion）已产出 `{midi, clef}` —— 跟弹模式直接复用
+- `src/core/session.ts` 状态机：跟弹模式以「起音事件→音高判定」替代「按钮→音级判定」，加一个 `answerPlay`
+- `StaffView`、打卡/统计/存储全部复用
