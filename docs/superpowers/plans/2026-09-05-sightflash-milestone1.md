@@ -1375,7 +1375,7 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 ```bash
 cd "d:/OneDrive/claude_project/cleaner/sightflash"
 npx vitest run src/app/App.test.tsx
-npx tsc --noEmit
+npx tsc -b # 类型门禁：根 tsconfig 为 references 方案，单独跑 --noEmit 是空操作，须用 -b
 ```
 Expected: 测试 PASS；tsc 无错。
 
@@ -1839,7 +1839,7 @@ function Shell() {
 ```bash
 cd "d:/OneDrive/claude_project/cleaner/sightflash"
 npx vitest run
-npx tsc --noEmit
+npx tsc -b # 类型门禁：根 tsconfig 为 references 方案，单独跑 --noEmit 是空操作，须用 -b
 ```
 Expected: 全绿、无类型错误。
 
@@ -2044,7 +2044,7 @@ function Shell() {
 ```bash
 cd "d:/OneDrive/claude_project/cleaner/sightflash"
 npx vitest run
-npx tsc --noEmit
+npx tsc -b # 类型门禁：根 tsconfig 为 references 方案，单独跑 --noEmit 是空操作，须用 -b
 npm run build
 ```
 Expected: 测试全绿；tsc 无错；build 成功产出 `dist/`（含 PWA workbox 产物）。
