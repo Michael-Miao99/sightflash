@@ -46,3 +46,15 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 .piano .key.white .c4 { position: absolute; left: 50%; bottom: 5px; width: 8px; height: 8px;
   border-radius: 50%; background: #eab308; transform: translateX(-50%);
   box-shadow: 0 0 0 1px rgba(15, 23, 42, .35); }
+/* 竖屏提示：仅竖屏显示，横屏自动隐藏 */
+.rotate-hint { display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 0 auto 10px; max-width: 480px; background: #1e293b; color: #94a3b8;
+  font-size: .85rem; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; }
+
+@media (orientation: landscape) {
+  #root { max-width: 920px; }
+  .rotate-hint { display: none; }
+  .practice .staff-wrap svg { max-width: 210px; }
+  .practice .note-btn { max-width: 64px; }
+  .practice .piano { max-width: 920px; height: 185px; }
+}

@@ -74,6 +74,7 @@ export function PracticeScreen() {
 
   return (
     <main className="screen practice">
+      <p className="rotate-hint" role="note" data-testid="rotate-hint">横屏使用键位更宽 ↻</p>
       <div className="row space-between">
         <span>S{state.progress.stage} · {clefName}</span>
         <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
