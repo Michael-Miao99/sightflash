@@ -2039,6 +2039,10 @@ function Shell() {
 }
 ```
 
+- [ ] **Step 4b: 更新 App.test.tsx 的 setup 导航断言**
+
+Task 8 的导航测试断言 setup 占位文本「开始设置（Task 11 接入）」（`src/app/App.test.tsx` 的 `点"开始训练"进入 setup 视图`）。Task 11 把占位换成真实 SetupScreen（h1 为「开始训练」，含「选择谱号」标签），该断言必须改为断言真实页特征文本，否则全量测试会红。把 `expect(await screen.findByText(/开始设置/)).toBeInTheDocument();` 改为 `expect(await screen.findByText(/选择谱号/)).toBeInTheDocument();`。
+
 - [ ] **Step 5: 运行全量测试 + 构建冒烟**
 
 ```bash
