@@ -5,11 +5,14 @@ import { finalizeSession } from '../core/finalize';
 import { mulberry32 } from '../core/generator/generator';
 import { midiToName, LETTER_PC } from '../core/notation/note';
 import { playPiano } from './piano.ts';
+import { requestLandscape } from './landscape';
 import { StaffView } from './StaffView';
 import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 
 const PITCH_BUTTONS = Object.keys(LETTER_PC); // C→B 插入序（与 letter 按钮一致）
+const ROTATE_HINT_BASE = '横屏使用键位更宽 ↻';
+const ROTATE_HINT_MANUAL = '请手动旋转手机 ↻';
 
 export function PracticeScreen() {
   const { state, setState, repo, go } = useApp();
@@ -20,6 +23,7 @@ export function PracticeScreen() {
   );
   const [left, setLeft] = useState(cfg.durationSec);
   const finished = useRef(false);
+  const [hintMsg, setHintMsg] = useState(ROTATE_HINT_BASE);
 
   // 倒计时
   useEffect(() => {
@@ -63,6 +67,11 @@ export function PracticeScreen() {
     setSess((s) => answerKey(s, midi));
   }
 
+  // 横屏提示：点击尝试全屏/锁定横屏；浏览器不支持时改为“请手动旋转”的提示。
+  function onRotateHint() {
+    void requestLandscape().then((ok) => setHintMsg(ok ? ROTATE_HINT_BASE : ROTATE_HINT_MANUAL));
+  }
+
   const fb = sess.last === null ? 'none' : sess.last.result === 'correct' ? 'ok' : 'bad'; // 对齐样式 .fb.ok/.fb.bad
   const fbText =
     sess.last === null
@@ -74,7 +83,7 @@ export function PracticeScreen() {
 
   return (
     <main className="screen practice">
-      <p className="rotate-hint" role="note" data-testid="rotate-hint">横屏使用键位更宽 ↻</p>
+      <button type="button" className="rotate-hint" data-testid="rotate-hint" onClick={onRotateHint}>{hintMsg}</button>
       <div className="row space-between">
         <span>S{state.progress.stage} · {clefName}</span>
         <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>

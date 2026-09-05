@@ -239,6 +239,7 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 ### 21.1 横屏优先（手机）
 - PWA manifest 增加 `orientation: 'landscape'`：Android 安装为 standalone 后自动横屏；iOS 无程序级强制旋转，靠用户在浏览器内旋转（Safari 不遵循 manifest orientation）。
 - **自适应**：`orientation: landscape` 媒体查询下，`#root` 内容宽度上限由 640px 放宽到约 920px，练习屏钢琴键盘随之横贯可用宽度、高度增至约 180px（保证 3 音区时白键仍可手按）；**竖屏**下布局不变（640 上限、键盘较窄），但练习屏顶部显示「建议横屏」提示条（横屏时 CSS 隐藏）。
+- 提示条**可点击**：点击优先请求全屏（Chrome/Android 全屏通常自动转横）并尝试 `orientation.lock('landscape')` 锁定；浏览器不支持程序转屏（如 iOS Safari 无根元素全屏/无 orientation）时，提示条文案原地变为「请手动旋转手机 ↻」，保证点击始终有反馈。
 
 ### 21.2 琴键窗口：随谱号 3 个八度（取代 §20.1 的 2 八度）
 - 高音题窗口 **C3~C6**（midi 48–84）、低音题窗口 **C2~C5**（midi 36–72）；各 22 白键 / 15 黑键，仍随当前题谱号切换（混合模式随题跳），仍完整覆盖出题区（高 C4~G5 / 低 G2~C4）。
