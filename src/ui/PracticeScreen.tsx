@@ -6,6 +6,7 @@ import { mulberry32 } from '../core/generator/generator';
 import { midiToName, LETTER_PC } from '../core/notation/note';
 import { StaffView } from './StaffView';
 import { NoteButton } from './NoteButton';
+import { playFeedback } from './sound';
 
 const PITCH_BUTTONS = Object.keys(LETTER_PC); // C→B 插入序（与 letter 按钮一致）
 
@@ -46,7 +47,9 @@ export function PracticeScreen() {
 
   function onTap(label: string) {
     const pc = LETTER_PC[label];
-    if (pc === undefined) return; // 防御：异常 label 直接忽略，避免 NaN 判错
+    if (pc === undefined) return; // 防御：异常 label 直接忽略
+    const ok = pc === sess.target.midi % 12; // 与 answerTap 判定一致（纯字母比，naturals）
+    playFeedback(state.settings.sound, ok ? 'ok' : 'bad');
     setSess((s) => answerTap(s, pc));
   }
 
