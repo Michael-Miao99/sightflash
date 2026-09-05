@@ -20,8 +20,13 @@ export function SettingsScreen() {
           ))}
         </div>
         <button className="danger" onClick={async () => {
-          await repo.clearAll();
-          setState(() => defaultState());
+          if (!window.confirm('确定清除全部本地数据？进度、连续天数与练习记录都会被清空。')) return;
+          try {
+            await repo.clearAll();
+            setState(() => defaultState());
+          } catch (e) {
+            console.warn('clearAll failed', e);
+          }
         }}>清除本地数据</button>
       </div>
       <button className="ghost" onClick={() => go('home')}>返回</button>
