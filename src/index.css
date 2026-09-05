@@ -60,16 +60,16 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 
   /* 练习屏横屏：一屏放全、纵向不滚动。谱面 svg 带内联 maxWidth:320（StaffView），
      样式表压不过它，故用 .staff-wrap 限宽 180 → svg(272/320 纵横比) ≈153 高。
-     固定件合计 ≈252px，钢琴 flex:1 吸收剩余高度(360→~108 / 375→~123 / 430→~178)。
+     固定件合计 ≈255px，钢琴 flex:1 吸收剩余高度(360→~108(恰好兜底) / 375→~120 / 430→~175)。
      真机微调优先：.staff-wrap 的 max-width、.note-btn 的 height、
      .piano 的 min/max-height、.practice 的 gap（见设计文档 §22.1）。 */
   .practice {
     height: 100dvh;
-    padding: 6px 12px;
+    padding: 4px 12px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    gap: 4px;
+    gap: 2px;
   }
   .practice .row { flex: none; }
   .practice .row.space-between { font-size: 0.9rem; }
