@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { midiToPc, midiToName, nameToMidi, letterIndex, LETTER_PC } from './note';
+import { midiToName, nameToMidi, letterIndex, LETTER_PC } from './note';
 
 describe('note 音高模型', () => {
   it('midiToName: C4=60, A4=69, G2=43', () => {
