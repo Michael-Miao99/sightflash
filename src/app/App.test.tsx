@@ -13,7 +13,7 @@ describe('AppRoot', () => {
     render(<AppRoot repoKind="memory" />);
     await screen.findByText(/五线速读/);
     await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
-    expect(await screen.findByText(/开始设置/)).toBeInTheDocument();
+    expect(await screen.findByText(/选择谱号/)).toBeInTheDocument();
   });
 
   it('IndexedDB 打开失败时内存降级，不卡在载入中', async () => {

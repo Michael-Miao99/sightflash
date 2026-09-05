@@ -1,7 +1,10 @@
 import { AppProvider, useApp } from './state';
 import { HomeScreen } from '../ui/HomeScreen';
+import { SetupScreen } from '../ui/SetupScreen';
 import { PracticeScreen } from '../ui/PracticeScreen';
 import { ResultScreen } from '../ui/ResultScreen';
+import { StatsScreen } from '../ui/StatsScreen';
+import { SettingsScreen } from '../ui/SettingsScreen';
 
 export function AppRoot({ repoKind }: { repoKind?: 'memory' | 'auto' }) {
   return (
@@ -18,10 +21,10 @@ function Shell() {
   if (!ready) return <div className="boot">载入中…</div>;
   switch (view) {
     case 'practice': return <PracticeScreen />;
+    case 'setup': return <SetupScreen />;
     case 'result': return <ResultScreen />;
-    case 'setup': return <div className="boot">开始设置（Task 11 接入）</div>;
-    case 'stats': return <div className="boot">数据视图（Task 11 接入）</div>;
-    case 'settings': return <div className="boot">设置（Task 11 接入）</div>;
+    case 'stats': return <StatsScreen />;
+    case 'settings': return <SettingsScreen />;
     case 'home':
     default: return <HomeScreen />;
   }
