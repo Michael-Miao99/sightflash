@@ -1639,20 +1639,22 @@ export interface WrongDeltas {
 }
 
 /**
- * 从一局 history 归纳错音增删。
- * 规则：对某一 MIDI，history 中最后一次该音的作答为 correct → 本轮解决了它（recalled）；
- * 若从未答对过（最后一次仍 wrong）→ toLearn。对 recalled 中错计数为 0 者 registerCorrect 无副作用。
+ * 从一局 history 归纳错音增删（history[0] 为最新，answerTap 前插）。
+ * recalled：本轮至少答对过 1 次的音（若先前有错计数则 registerCorrect 扣减）；
+ * toLearn：本轮结束仍停在错的音（该音最新一次作答仍 wrong，即使中途对过）→ registerMistake 加深。
+ * 两集合可重叠（PracticeScreen 先加深后扣减）。按 MIDI 升序输出，保证确定性。
  */
 export function computeWrongDeltas(history: HistoryItem[]): WrongDeltas {
-  const learned = new Set<number>();
-  const notSolved = new Set<number>();
+  const recalled = new Set<number>();
+  const last = new Map<number, ResultKind>(); // 每音最新一次作答（首个遇到的即最新）
   for (const h of history) {
-    if (h.result === 'correct') learned.add(h.expectedMidi);
-    else notSolved.add(h.expectedMidi);
+    if (h.result === 'correct') recalled.add(h.expectedMidi);
+    if (!last.has(h.expectedMidi)) last.set(h.expectedMidi, h.result);
   }
+  const sort = (a: number, b: number) => a - b;
   return {
-    toLearn: [...notSolved].filter((m) => !learned.has(m)),
-    recalled: [...learned],
+    toLearn: [...last.entries()].filter(([, r]) => r === 'wrong').map(([m]) => m).sort(sort),
+    recalled: [...recalled].sort(sort),
   };
 }
 ```
@@ -1731,7 +1733,7 @@ export function PracticeScreen() {
     setSess((s) => answerTap(s, pc));
   }
 
-  const fb = sess.last === null ? 'none' : sess.last.result;
+  const fb = sess.last === null ? 'none' : sess.last.result === 'correct' ? 'ok' : 'bad'; // 对齐样式 .fb.ok/.fb.bad
   const fbText =
     sess.last === null
       ? '看谱，点出这个音的名字'
