@@ -33,7 +33,7 @@ export function makeRepo(repoKind?: 'memory' | 'auto'): SightRepo {
 }
 
 export function AppProvider({ repoKind, children }: { repoKind?: 'memory' | 'auto'; children: ReactNode }) {
-  const repo = useMemo(() => makeRepo(repoKind), [repoKind]);
+  const [repo, setRepo] = useState<SightRepo>(() => makeRepo(repoKind));
   const [state, setState] = useState<AppState>(initialState());
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>('home');
@@ -41,18 +41,26 @@ export function AppProvider({ repoKind, children }: { repoKind?: 'memory' | 'aut
   // 首次载入
   useEffect(() => {
     let alive = true;
-    repo.loadState().then((s) => {
-      if (!alive) return;
-      setState(s);
-      setReady(true);
-    });
+    repo
+      .loadState()
+      .then((s) => {
+        if (!alive) return;
+        setState(s);
+        setReady(true);
+      })
+      .catch(() => {
+        // IndexedDB 打开失败（隐私/存储禁用/配额）→ 内存降级，避免永久卡在载入
+        if (!alive) return;
+        setRepo(new MemoryRepo(initialState()));
+        setReady(true);
+      });
     return () => { alive = false; };
   }, [repo]);
 
   // 状态变更即持久化（本 App 数据量小，直接全量保存；ready 前不写以免覆盖载入）
   useEffect(() => {
     if (!ready) return;
-    void repo.saveState(state);
+    repo.saveState(state).catch((e) => console.warn('saveState failed', e));
   }, [repo, state, ready]);
 
   const store: AppStore = useMemo(
