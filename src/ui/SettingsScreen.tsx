@@ -7,7 +7,7 @@ export function SettingsScreen() {
     <main className="screen settings">
       <h1>设置</h1>
       <div className="card">
-        <div className="row"><span>提示音</span>
+        <div className="row"><span>声音</span>
           <button className="sel small" onClick={() => setState((p) => ({ ...p, settings: { ...p.settings, sound: !p.settings.sound } }))}>
             {state.settings.sound ? '开' : '关'}
           </button>

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/state';
-import { createSession, answerTap } from '../core/session';
+import { createSession, answerTap, answerKey } from '../core/session';
 import { finalizeSession } from '../core/finalize';
 import { mulberry32 } from '../core/generator/generator';
 import { midiToName, LETTER_PC } from '../core/notation/note';
+import { playPiano } from './piano.ts';
 import { StaffView } from './StaffView';
 import { NoteButton } from './NoteButton';
-import { playFeedback } from './sound';
+import { Piano } from './Piano.tsx';
 
 const PITCH_BUTTONS = Object.keys(LETTER_PC); // C→B 插入序（与 letter 按钮一致）
 
@@ -35,7 +36,6 @@ export function PracticeScreen() {
       correct: sess.correct, total: sess.total, durationSec: cfg.durationSec,
       history: sess.history, stage: cfg.stage, clef: cfg.clef, ts: now.getTime(),
     });
-    // 先落库成功再跳转，保证 ResultScreen 能读到最新记录
     repo.addSession(record)
       .catch((e) => console.warn('addSession failed', e))
       .finally(() => {
@@ -45,18 +45,28 @@ export function PracticeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);
 
+  const sound = state.settings.sound;
+
+  // 音名按钮作答：判对播目标音；判错播“所选音名 @ 谱面音符八度”的错音。
   function onTap(label: string) {
     const pc = LETTER_PC[label];
     if (pc === undefined) return; // 防御：异常 label 直接忽略
-    const ok = pc === sess.target.midi % 12; // 与 answerTap 判定一致（纯字母比，naturals）
-    playFeedback(state.settings.sound, ok ? 'ok' : 'bad');
+    const target = sess.target.midi;
+    const ok = pc === target % 12;
+    playPiano(sound, ok ? target : Math.floor(target / 12) * 12 + pc);
     setSess((s) => answerTap(s, pc));
+  }
+
+  // 琴键作答：按下立即播该键音；判定交给 answerKey（精确八度）。
+  function onKey(midi: number) {
+    playPiano(sound, midi);
+    setSess((s) => answerKey(s, midi));
   }
 
   const fb = sess.last === null ? 'none' : sess.last.result === 'correct' ? 'ok' : 'bad'; // 对齐样式 .fb.ok/.fb.bad
   const fbText =
     sess.last === null
-      ? '看谱，点出这个音的名字'
+      ? '看谱，点出这个音的名字（按钮或琴键）'
       : sess.last.result === 'correct'
         ? '✓ 对！'
         : `✗ 是 ${midiToName(sess.last.expectedMidi)}`;
@@ -77,6 +87,7 @@ export function PracticeScreen() {
           <NoteButton key={b} label={b} onClick={() => onTap(b)} />
         ))}
       </div>
+      <Piano clef={sess.target.clef} onKey={onKey} />
     </main>
   );
 }

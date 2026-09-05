@@ -1,3 +1,5 @@
+// 注意：与 ui/piano.ts（发声引擎）同基名异大小写。Windows 大小写不敏感下省略扩展名会误解析，
+// 导入本组件须写 ./Piano.tsx、导入引擎须写 ./piano.ts。
 import { useMemo } from 'react';
 import type { Clef } from '../core/notation/positions';
 
