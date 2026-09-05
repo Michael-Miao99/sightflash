@@ -34,22 +34,22 @@
   #root { max-width: 920px; }
   .rotate-hint { display: none; }
 
-  /* 练习屏横屏：一屏放全、纵向不滚动。固定件(表头+谱面+反馈+按钮)合计 ≈248px，
-     钢琴 flex:1 吸收剩余高度(360→~112 / 375→~127 / 430→~182)。
-     真机微调优先：.staff-wrap svg 的 max-width、.note-btn 的 height、
+  /* 练习屏横屏：一屏放全、纵向不滚动。谱面 svg 带内联 maxWidth:320（StaffView），
+     样式表压不过它，故用 .staff-wrap 限宽 180 → svg(272/320 纵横比) ≈153 高。
+     固定件合计 ≈255px，钢琴 flex:1 吸收剩余高度(360→~108 兜底 / 375→~120 / 430→~175)。
+     真机微调优先：.staff-wrap 的 max-width、.note-btn 的 height、
      .piano 的 min/max-height、.practice 的 gap（见设计文档 §22.1 可调参数）。 */
   .practice {
     height: 100dvh;
-    padding: 6px 12px;
+    padding: 4px 12px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    gap: 4px;
+    gap: 2px;
   }
   .practice .row { flex: none; }
   .practice .row.space-between { font-size: 0.9rem; }
-  .practice .staff-wrap { margin: 0; flex: none; }
-  .practice .staff-wrap svg { max-width: 180px; }
+  .practice .staff-wrap { max-width: 180px; margin: 0 auto; flex: none; }
   .practice .fb { min-height: 18px; margin: 0; font-size: 1rem; flex: none; }
   .practice .note-btn { max-width: 64px; aspect-ratio: auto; height: 32px; font-size: 1.1rem; border-radius: 8px; }
   .practice .piano {
@@ -62,6 +62,8 @@
     margin: 2px auto 0;
   }
 }
+
+> **执行演进记录（合入版为准）**：初版曾用 `.practice .staff-wrap svg { max-width:180px }` 直裁 svg，但 `StaffView` svg 内联 `max-width:320` 会压制样式表（死代码）→ 评审中发现，改为**裁父容器 `.staff-wrap`**（commit `ee052be`）；其后按 360 高视口（最紧档）实测把 `padding 6px→4px`、`gap 4px→2px` 收尾（commit `9a6a5f8`）。以本文档 CSS 块为准。
 ```
 
 实现要点（评审对照）：
@@ -93,8 +95,8 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
 - [ ] **Step 6: 自评（向主会话报告）**
-  - 确认横屏 `.practice` 有 `overflow:hidden`＋`height:100dvh`；固定件高度预算 ≈248、钢琴 `min-height:108`（360 高视口不致削底）。
+  - 确认横屏 `.practice` 有 `overflow:hidden`＋`height:100dvh`；固定件高度预算 ≈255、钢琴 `min-height:108`（360 高视口键盘底 < 360、完整可见不削底）。
   - 竖屏基类（`.piano{height:150px}`、`.note-btn{aspect-ratio:1}`、`.screen{padding:16px}`）未被改动。
   - 状态：DONE / DONE_WITH_CONCERNS / BLOCKED。
 
-**验收（真机，后续由主会话交 boss 做，不在本任务自动判定）：** Android PWA 与 iOS Safari 横屏下练习屏整屏可见、无纵向滚动，键盘随屏高自适应。若真机有出入按 §22.1 可调参数微调。
+**验收（真机，后续由主会话交 boss 做，不在本任务自动判定）：** Android PWA 与 iOS Safari 横屏下练习屏整屏可见、无纵向滚动，键盘随屏高自适应；**验收须含一台视口高 ≈360px 的横屏设备**确认键盘完整可点。若真机有出入按 §22.1 可调参数微调。
