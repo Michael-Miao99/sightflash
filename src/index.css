@@ -57,7 +57,32 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 @media (orientation: landscape) {
   #root { max-width: 920px; }
   .rotate-hint { display: none; }
-  .practice .staff-wrap svg { max-width: 210px; }
-  .practice .note-btn { max-width: 64px; }
-  .practice .piano { max-width: 920px; height: 185px; }
+
+  /* 练习屏横屏：一屏放全、纵向不滚动。固定件(表头+谱面+反馈+按钮)合计 ≈248px，
+     钢琴 flex:1 吸收剩余高度(360→~112 / 375→~127 / 430→~182)。
+     真机微调优先：.staff-wrap svg 的 max-width、.note-btn 的 height、
+     .piano 的 min/max-height、.practice 的 gap（见设计文档 §22.1 可调参数）。 */
+  .practice {
+    height: 100dvh;
+    padding: 6px 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 4px;
+  }
+  .practice .row { flex: none; }
+  .practice .row.space-between { font-size: 0.9rem; }
+  .practice .staff-wrap { margin: 0; flex: none; }
+  .practice .staff-wrap svg { max-width: 180px; }
+  .practice .fb { min-height: 18px; margin: 0; font-size: 1rem; flex: none; }
+  .practice .note-btn { max-width: 64px; aspect-ratio: auto; height: 32px; font-size: 1.1rem; border-radius: 8px; }
+  .practice .piano {
+    flex: 1 1 0;
+    min-height: 108px;
+    max-height: 46dvh;
+    height: auto;
+    width: 100%;
+    max-width: 920px;
+    margin: 2px auto 0;
+  }
 }
