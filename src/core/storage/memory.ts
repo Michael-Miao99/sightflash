@@ -1,4 +1,5 @@
 import type { AppState, SessionRecord } from './types';
+import { defaultState } from './logic';
 
 /** 仓储接口：里程碑 B（云同步/降级）复用同一接口 */
 export interface SightRepo {
@@ -11,7 +12,7 @@ export interface SightRepo {
 
 /** 内存实现：供测试与浏览器无 IndexedDB 时降级 */
 export class MemoryRepo implements SightRepo {
-  private state: AppState;
+  private state: AppState | null;
   private sessions: SessionRecord[] = [];
   private seq = 1;
 
@@ -20,7 +21,7 @@ export class MemoryRepo implements SightRepo {
   }
 
   async loadState(): Promise<AppState> {
-    return structuredClone(this.state);
+    return structuredClone(this.state ?? defaultState());
   }
   async saveState(s: AppState): Promise<void> {
     this.state = structuredClone(s);
@@ -35,5 +36,6 @@ export class MemoryRepo implements SightRepo {
   }
   async clearAll(): Promise<void> {
     this.sessions = [];
+    this.state = null;
   }
 }

@@ -20,4 +20,14 @@ describe('MemoryRepo', () => {
     expect(id).toBe(1);
     expect((await repo.listSessions()).length).toBe(1);
   });
+
+  it('clearAll 后 loadState 回到默认状态', async () => {
+    const repo = new MemoryRepo(defaultState());
+    const s = await repo.loadState();
+    s.progress.stage = 4;
+    await repo.saveState(s);
+    await repo.clearAll();
+    expect((await repo.loadState()).progress.stage).toBe(1);
+    expect(await repo.listSessions()).toEqual([]);
+  });
 });

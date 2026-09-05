@@ -30,6 +30,12 @@ describe('storage logic 状态机', () => {
     expect(p.wrong[60]).toBeUndefined();
   });
 
+  it('registerCorrect：无错音记录时原样返回（不新增键）', () => {
+    const p = defaultState().progress;
+    expect(registerCorrect(p, 62)).toBe(p);
+    expect(p.wrong).toEqual({});
+  });
+
   it('makeDay 输出本地 YYYY-MM-DD', () => {
     expect(makeDay(new Date(2026, 8, 5, 12))).toBe('2026-09-05');
   });
