@@ -30,3 +30,15 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 .err-row .bar { flex: 1; margin: 0; }
 .bar-fill.warn { background: #f87171; }
 .danger { margin-top: 16px; }
+/* 仿真钢琴键盘 */
+.practice .staff-wrap svg { max-width: 250px; }
+.piano { position: relative; display: flex; width: 100%; max-width: 480px; height: 150px;
+  margin: 10px auto 2px; border-radius: 6px; overflow: hidden; background: #0b1220;
+  touch-action: none; user-select: none; }
+.piano .key.white { flex: 1 1 0; background: linear-gradient(#f8fafc, #dbe3ea);
+  border-right: 1px solid #94a3b8; border-radius: 0 0 4px 4px; }
+.piano .key.white:active { background: #94a3b8; }
+.piano .key.black { position: absolute; top: 0; height: 62%; z-index: 1;
+  background: linear-gradient(#1e293b, #0f172a); border: 1px solid #000;
+  border-radius: 0 0 3px 3px; }
+.piano .key.black:active { background: #334155; }
