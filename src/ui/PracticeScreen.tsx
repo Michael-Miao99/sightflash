@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/state';
-import { createSession, answerTap, computeWrongDeltas } from '../core/session';
+import { createSession, answerTap } from '../core/session';
+import { finalizeSession } from '../core/finalize';
 import { mulberry32 } from '../core/generator/generator';
-import { MAX_STAGE } from '../core/generator/stages';
-import { computeResult, shouldAdvanceStage } from '../core/result';
-import { makeDay, applyStreak, applyDaily, registerMistake, registerCorrect } from '../core/storage/logic';
-import { midiToName } from '../core/notation/note';
+import { midiToName, LETTER_PC } from '../core/notation/note';
 import { StaffView } from './StaffView';
 import { NoteButton } from './NoteButton';
 
-const PITCH_BUTTONS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
-const BUTTON_PC: Record<(typeof PITCH_BUTTONS)[number], number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const PITCH_BUTTONS = Object.keys(LETTER_PC); // C→B 插入序（与 letter 按钮一致）
 
 export function PracticeScreen() {
   const { state, setState, repo, go } = useApp();
@@ -28,37 +25,28 @@ export function PracticeScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // 时间到 → 结算 → 落库（setState 触发 state.tsx 持久化）
+  // 时间到 → 结算 → 落库（先落库成功再跳转，保证 ResultScreen 能读到最新记录）
   useEffect(() => {
     if (left > 0 || finished.current) return;
     finished.current = true;
-    const r = computeResult(sess.correct, sess.total, cfg.durationSec);
     const now = new Date();
-    const today = makeDay(now);
-
-    // 错音池增量：未解决音加深，有答对的音出池
-    const { toLearn, recalled } = computeWrongDeltas(sess.history);
-    let progress = state.progress;
-    for (const m of toLearn) progress = registerMistake(progress, m);
-    for (const m of recalled) progress = registerCorrect(progress, m);
-
-    // 升阶（任一完整轮次准确率 ≥85，封顶 S5）
-    if (shouldAdvanceStage(r) && progress.stage < MAX_STAGE) progress = { ...progress, stage: progress.stage + 1 };
-
-    const streak = applyStreak(state.streak, today);
-    const daily = applyDaily(state.daily, today, sess.correct);
-    void repo.addSession({
-      ts: now.getTime(), mode: 'tap', clef: cfg.clef, stage: cfg.stage,
+    const { progress, streak, daily, record } = finalizeSession(state, {
       correct: sess.correct, total: sess.total, durationSec: cfg.durationSec,
-      speed: r.speed, accuracy: r.accuracy,
+      history: sess.history, stage: cfg.stage, clef: cfg.clef, ts: now.getTime(),
     });
-    setState((prev) => ({ ...prev, progress, streak, daily }));
-    go('result');
+    // 先落库成功再跳转，保证 ResultScreen 能读到最新记录
+    repo.addSession(record)
+      .catch((e) => console.warn('addSession failed', e))
+      .finally(() => {
+        setState((prev) => ({ ...prev, progress, streak, daily }));
+        go('result');
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);
 
   function onTap(label: string) {
-    const pc = BUTTON_PC[label as keyof typeof BUTTON_PC];
+    const pc = LETTER_PC[label];
+    if (pc === undefined) return; // 防御：异常 label 直接忽略，避免 NaN 判错
     setSess((s) => answerTap(s, pc));
   }
 
