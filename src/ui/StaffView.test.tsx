@@ -14,4 +14,12 @@ describe('StaffView', () => {
     render(<StaffView midi={60} clef="bass" />);
     expect(document.querySelectorAll('line.ledger')).toHaveLength(1);
   });
+
+  it('垂直方向正确：低音在下、高音在上（y 坐标单调）', () => {
+    const low = render(<StaffView midi={60} clef="treble" />); // C4 在底线下方（下加一线）
+    const high = render(<StaffView midi={77} clef="treble" />); // F5 顶线
+    const y = (el: HTMLElement) =>
+      Number(el.querySelector('ellipse.note-head')!.getAttribute('cy'));
+    expect(y(low.container)).toBeGreaterThan(y(high.container));
+  });
 });

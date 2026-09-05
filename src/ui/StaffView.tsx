@@ -2,31 +2,33 @@ import { layoutStaffNote } from '../core/notation/positions';
 import type { Clef } from '../core/notation/positions';
 
 const SPACE = 16; // px / 谱表步
-const VIEW_STEPS = 17; // 纵向步数（覆盖 -5 ~ +11，含下加线与上加线）
-const MARGIN_TOP = 5; // step0（底线）位于 y=80，向上留 5 步给谱号与符干
+const VIEW_STEPS = 17; // viewBox 高 = 17 步 = 272px
+const ANCHOR_STEP = 13; // y=0（顶边）对应的谱表步；step 越往下越小
 const SVG_W = 320;
-const LINES = [0, 2, 4, 6, 8]; // 五条线的谱表步
+const LINES = [0, 2, 4, 6, 8]; // 五条线自下而上：步 0 底线(E4/G2) ~ 步 8 顶线(F5/A3)
 const clefGlyph: Record<Clef, string> = { treble: '𝄞', bass: '𝄢' };
+
+// SVG y 向下增长；谱表步越大音越高、画得越靠上，故 y 越小。
+const stepToY = (s: number) => (ANCHOR_STEP - s) * SPACE;
 
 export function StaffView({ midi, clef }: { midi: number; clef: Clef }) {
   const { step, ledgerLines } = layoutStaffNote(midi, clef);
   const H = VIEW_STEPS * SPACE;
-  const yOf = (s: number) => (MARGIN_TOP + s) * SPACE; // s 越大，屏幕 y 越大（越靠下）
-  const cy = yOf(step);
+  const cy = stepToY(step);
   return (
     <div className="staff-wrap">
       <svg data-testid="staff" viewBox={`0 0 ${SVG_W} ${H}`} style={{ width: '100%', maxWidth: 320, display: 'block', margin: '0 auto' }}>
         {/* 谱号：基线大致落在谱中央附近 */}
-        <text data-testid="clef" x={14} y={yOf(clef === 'treble' ? 2 : 0) + 6} fontSize={52}
+        <text data-testid="clef" x={14} y={stepToY(clef === 'treble' ? 2 : 0) + 6} fontSize={52}
           fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">
           {clefGlyph[clef]}
         </text>
         {LINES.map((l) => (
-          <line key={l} className="staff-line" x1={60} x2={SVG_W - 16} y1={yOf(l)} y2={yOf(l)}
+          <line key={l} className="staff-line" x1={60} x2={SVG_W - 16} y1={stepToY(l)} y2={stepToY(l)}
             stroke="#64748b" strokeWidth={1.5} />
         ))}
         {ledgerLines.map((l) => (
-          <line key={l} className="ledger" x1={186} x2={246} y1={yOf(l)} y2={yOf(l)}
+          <line key={l} className="ledger" x1={186} x2={246} y1={stepToY(l)} y2={stepToY(l)}
             stroke="#cbd5e1" strokeWidth={1.5} />
         ))}
         <ellipse className="note-head" cx={216} cy={cy} rx={10} ry={8} fill="#f8fafc"
