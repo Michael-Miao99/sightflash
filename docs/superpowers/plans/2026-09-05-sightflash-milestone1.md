@@ -1442,7 +1442,7 @@ const clefGlyph: Record<Clef, string> = { treble: '𝄞', bass: '𝄢' };
 export function StaffView({ midi, clef }: { midi: number; clef: Clef }) {
   const { step, ledgerLines } = layoutStaffNote(midi, clef);
   const H = VIEW_STEPS * SPACE;
-  const yOf = (s: number) => (MARGIN_TOP - s) * SPACE; // s 越大越靠下
+  const yOf = (s: number) => (MARGIN_TOP + s) * SPACE; // s 越大，屏幕 y 越大（越靠下）
   const cy = yOf(step);
   return (
     <div className="staff-wrap">
@@ -1469,7 +1469,7 @@ export function StaffView({ midi, clef }: { midi: number; clef: Clef }) {
 }
 ```
 
-> y 方向：谱表步 s 越大越靠下（`MARGIN_TOP=5` 使 step0 基线位于上部 5*16=80px）。本组件几何由 Task 3 单测保证，视觉精确性由 Task 12 真机清单核对。
+> y 方向：谱表步 s 越大越靠下，step0（底线）位于 y=5*16=80，向上留 5 步给谱号与符干，向下覆盖至 step12（上加二线边界），可见 s ∈ [-5, 12]，覆盖全部音符池（-2 下加一线 ~ +10 上加一线）及其加线。本组件几何由 Task 3 单测保证，视觉精确性由 Task 12 真机清单核对。
 > 谱号字形 𝄞/𝄢 依赖系统音乐字体（安卓 Chrome 通常有 Noto Music）；若真机缺字形，里程碑 B 收尾再换内嵌 SVG 路径——记为已知待办，不进本计划。
 
 - [ ] **Step 4: 运行测试确认通过**
