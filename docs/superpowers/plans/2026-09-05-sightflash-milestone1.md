@@ -1416,6 +1416,14 @@ describe('StaffView', () => {
     render(<StaffView midi={60} clef="bass" />);
     expect(document.querySelectorAll('line.ledger')).toHaveLength(1);
   });
+
+  it('垂直方向正确：低音在下、高音在上（y 坐标单调）', () => {
+    const low = render(<StaffView midi={60} clef="treble" />); // C4 在底线下方（下加一线）
+    const high = render(<StaffView midi={77} clef="treble" />); // F5 顶线
+    const y = (el: HTMLElement) =>
+      Number(el.querySelector('ellipse.note-head')!.getAttribute('cy'));
+    expect(y(low.container)).toBeGreaterThan(y(high.container));
+  });
 });
 ```
 
@@ -1433,31 +1441,33 @@ import { layoutStaffNote } from '../core/notation/positions';
 import type { Clef } from '../core/notation/positions';
 
 const SPACE = 16; // px / 谱表步
-const VIEW_STEPS = 17; // 纵向步数（覆盖 -2 下加线 ~ +12 上加二线）
-const MARGIN_TOP = 5; // 顶部留 5 步（让高音谱号与符干有空间）
+const VIEW_STEPS = 17; // viewBox 高 = 17 步 = 272px
+const ANCHOR_STEP = 13; // y=0（顶边）对应的谱表步；step 越往下越小
 const SVG_W = 320;
-const LINES = [0, 2, 4, 6, 8]; // 五条线的谱表步
+const LINES = [0, 2, 4, 6, 8]; // 五条线自下而上：步 0 底线(E4/G2) ~ 步 8 顶线(F5/A3)
 const clefGlyph: Record<Clef, string> = { treble: '𝄞', bass: '𝄢' };
+
+// SVG y 向下增长；谱表步越大音越高、画得越靠上，故 y 越小。
+const stepToY = (s: number) => (ANCHOR_STEP - s) * SPACE;
 
 export function StaffView({ midi, clef }: { midi: number; clef: Clef }) {
   const { step, ledgerLines } = layoutStaffNote(midi, clef);
   const H = VIEW_STEPS * SPACE;
-  const yOf = (s: number) => (MARGIN_TOP + s) * SPACE; // s 越大，屏幕 y 越大（越靠下）
-  const cy = yOf(step);
+  const cy = stepToY(step);
   return (
     <div className="staff-wrap">
       <svg data-testid="staff" viewBox={`0 0 ${SVG_W} ${H}`} style={{ width: '100%', maxWidth: 320, display: 'block', margin: '0 auto' }}>
-        {/* 谱号：基线大致落在谱中央附近 */}
-        <text data-testid="clef" x={14} y={yOf(clef === 'treble' ? 2 : 0) + 6} fontSize={52}
+        {/* 谱号：基线为近似值（依赖系统字形度量），Task 12 真机核对 */}
+        <text data-testid="clef" x={14} y={stepToY(clef === 'treble' ? 2 : 0) + 6} fontSize={52}
           fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">
           {clefGlyph[clef]}
         </text>
         {LINES.map((l) => (
-          <line key={l} className="staff-line" x1={60} x2={SVG_W - 16} y1={yOf(l)} y2={yOf(l)}
+          <line key={l} className="staff-line" x1={60} x2={SVG_W - 16} y1={stepToY(l)} y2={stepToY(l)}
             stroke="#64748b" strokeWidth={1.5} />
         ))}
         {ledgerLines.map((l) => (
-          <line key={l} className="ledger" x1={186} x2={246} y1={yOf(l)} y2={yOf(l)}
+          <line key={l} className="ledger" x1={186} x2={246} y1={stepToY(l)} y2={stepToY(l)}
             stroke="#cbd5e1" strokeWidth={1.5} />
         ))}
         <ellipse className="note-head" cx={216} cy={cy} rx={10} ry={8} fill="#f8fafc"
@@ -1469,7 +1479,7 @@ export function StaffView({ midi, clef }: { midi: number; clef: Clef }) {
 }
 ```
 
-> y 方向：谱表步 s 越大越靠下，step0（底线）位于 y=5*16=80，向上留 5 步给谱号与符干，向下覆盖至 step12（上加二线边界），可见 s ∈ [-5, 12]，覆盖全部音符池（-2 下加一线 ~ +10 上加一线）及其加线。本组件几何由 Task 3 单测保证，视觉精确性由 Task 12 真机清单核对。
+> y 方向：SVG y 向下增长，谱表步 s 越大（音越高）应画得越靠上，故 `stepToY(s) = (ANCHOR_STEP − s)·SPACE`。step0（底线 E4/G2）在 y=13·16=208，位于谱表下缘；step8（顶线 F5/A3）在 y=80。可见 s ∈ [−4, 13]：treble C4(−2) 画在底线下方（下加线），treble C6(12) 画在顶线上方（上加二线）。低音 C4 的加线是"上加一线"、应画在顶线之上。本组件几何由 Task 3 单测保证，谱号基线为近似值，视觉精确性由 Task 12 真机清单核对。
 > 谱号字形 𝄞/𝄢 依赖系统音乐字体（安卓 Chrome 通常有 Noto Music）；若真机缺字形，里程碑 B 收尾再换内嵌 SVG 路径——记为已知待办，不进本计划。
 
 - [ ] **Step 4: 运行测试确认通过**
