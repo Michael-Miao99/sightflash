@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { midiHz, playPiano, __resetPianoForTest } from './piano';
+import { midiHz, playPiano, __resetPianoForTest } from './piano.ts'; // 显式扩展名：与 Piano.tsx 同基名，见 Piano.tsx 头注
 
 function installFakeAudio() {
   const made: Array<{ src: Record<string, unknown>; buf: { data: Float32Array } }> = [];
