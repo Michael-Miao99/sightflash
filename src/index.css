@@ -35,10 +35,14 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 .piano { position: relative; display: flex; width: 100%; max-width: 480px; height: 150px;
   margin: 10px auto 2px; border-radius: 6px; overflow: hidden; background: #0b1220;
   touch-action: none; user-select: none; }
-.piano .key.white { flex: 1 1 0; background: linear-gradient(#f8fafc, #dbe3ea);
+.piano .key.white { position: relative; flex: 1 1 0; background: linear-gradient(#f8fafc, #dbe3ea);
   border-right: 1px solid #94a3b8; border-radius: 0 0 4px 4px; }
 .piano .key.white:active { background: #94a3b8; }
 .piano .key.black { position: absolute; top: 0; height: 62%; z-index: 1;
   background: linear-gradient(#1e293b, #0f172a); border: 1px solid #000;
   border-radius: 0 0 3px 3px; }
 .piano .key.black:active { background: #334155; }
+/* 中央C(C4) 唯一参照圆点 */
+.piano .key.white .c4 { position: absolute; left: 50%; bottom: 5px; width: 8px; height: 8px;
+  border-radius: 50%; background: #eab308; transform: translateX(-50%);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, .35); }

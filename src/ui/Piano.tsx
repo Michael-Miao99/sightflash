@@ -4,8 +4,11 @@ import { useMemo } from 'react';
 import type { Clef } from '../core/notation/positions';
 
 const BLACK_PC = new Set([1, 3, 6, 8, 10]); // C# D# F# G# A#
-/** 琴键窗口（含两端）：高音 C4~C6、低音 G2~G4。端点均为自然音白键，覆盖全部目标。 */
-const RANGE: Record<Clef, [number, number]> = { treble: [60, 84], bass: [43, 67] };
+/** 琴键窗口（含两端）：高音 C3~C6、低音 C2~C5，各三个八度。
+ *  端点均为自然音白键；两窗口均含中央C C4=60。
+ *  完全覆盖题目音池（高音 C4~G5 / 低音 G2~C4），上/下留有可弹富余。 */
+const RANGE: Record<Clef, [number, number]> = { treble: [48, 84], bass: [36, 72] };
+const MIDDLE_C = 60; // 中央C，唯一参照键
 const BLACK_W = 0.62; // 黑键宽 = 白键宽的 0.62
 
 function naturals(lo: number, hi: number): number[] {
@@ -19,7 +22,8 @@ function blacks(lo: number, hi: number): number[] {
   return out;
 }
 
-/** 仿真钢琴键盘：点击琴键（白/黑）回调 onKey(midi)。画出来由调用方决定发声与判定。 */
+/** 仿真钢琴键盘：点击琴键（白/黑）回调 onKey(midi)。画出来由调用方决定发声与判定。
+ *  仅中央C(C4) 白键带参照圆点，其余琴键无任何额外标记。 */
 export function Piano({ clef, onKey }: { clef: Clef; onKey: (midi: number) => void }) {
   const [lo, hi] = RANGE[clef];
   const whites = useMemo(() => naturals(lo, hi), [lo, hi]);
@@ -29,7 +33,9 @@ export function Piano({ clef, onKey }: { clef: Clef; onKey: (midi: number) => vo
     <div className="piano" role="group" aria-label="钢琴键盘">
       {whites.map((m) => (
         <div key={m} data-testid={`w-${m}`} data-midi={m} className="key white"
-          onPointerDown={(e) => { e.preventDefault(); onKey(m); }} />
+          onPointerDown={(e) => { e.preventDefault(); onKey(m); }}>
+          {m === MIDDLE_C && <span className="c4" data-testid="c4-marker" aria-label="中央C" />}
+        </div>
       ))}
       {blackList.map((m) => {
         const i = whiteIdx.get(m - 1) ?? 0; // 黑键左侧白键下标
