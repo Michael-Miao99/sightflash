@@ -17,7 +17,7 @@ const MODE_NAME: Record<Mode, string> = { tap: '认音', play: '跟弹' };
 export function SetupScreen() {
   const { state, setState, go } = useApp();
   const stage = state.progress.stage;
-  const mode = state.settings.lastMode;
+  const mode = state.settings.lastMode ?? 'tap'; // 里程碑 A 老档缺 lastMode → 兜底认音，分段选中态不落空（§24）
   const modeName = MODE_NAME[mode] ?? '认音'; // 老档缺字段兜底（§24 模式）
 
   function start(clef: MixedClef) {
