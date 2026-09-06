@@ -83,4 +83,16 @@ describe('finalizeSession 轮次结算纯函数', () => {
     // 有意为之：64 加深 1 又扣减 1 → 净效果不变；67 不受影响
     expect(res.progress.wrong).toEqual({});
   });
+
+  it('mode 透传：finalizeSession 以入参 mode 写 record.mode（缺省 tap）', () => {
+    const prev = defaultState();
+    const base = {
+      correct: 5, total: 10, durationSec: 60,
+      history: [], stage: 1, clef: 'treble' as const, ts: TS,
+    };
+    const play = finalizeSession(prev, { ...base, mode: 'play' });
+    expect(play.record.mode).toBe('play');
+    const tap = finalizeSession(prev, base); // 未传 mode → 回落 tap（既有调用/老测试不破坏）
+    expect(tap.record.mode).toBe('tap');
+  });
 });

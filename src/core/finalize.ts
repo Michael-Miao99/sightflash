@@ -1,6 +1,6 @@
 import { computeResult, shouldAdvanceStage } from './result';
 import { makeDay, applyStreak, applyDaily, registerMistake, registerCorrect } from './storage/logic';
-import type { AppState, SessionRecord } from './storage/types';
+import type { AppState, Mode, SessionRecord } from './storage/types';
 import { MAX_STAGE } from './generator/stages';
 import type { MixedClef } from './generator/stages';
 import { computeWrongDeltas, type HistoryItem } from './session';
@@ -15,6 +15,8 @@ export interface FinalizeInput {
   /** 本轮开局时的阶段（写入记录的是"本轮练的阶段"） */
   stage: number;
   clef: MixedClef;
+  /** 本轮模式（tap 认音 / play 跟弹）；缺省 'tap' 兼容既有调用 */
+  mode?: Mode;
   /** 轮次结束时刻（ms） */
   ts: number;
 }
@@ -49,7 +51,7 @@ export function finalizeSession(prev: AppState, input: FinalizeInput): FinalizeR
   const streak = applyStreak(prev.streak, today);
   const daily = applyDaily(prev.daily, today, input.correct);
   const record: SessionRecord = {
-    ts: input.ts, mode: 'tap', clef: input.clef, stage: input.stage,
+    ts: input.ts, mode: input.mode ?? 'tap', clef: input.clef, stage: input.stage,
     correct: input.correct, total: input.total, durationSec: input.durationSec,
     speed: r.speed, accuracy: r.accuracy,
   };

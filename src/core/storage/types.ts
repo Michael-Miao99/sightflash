@@ -5,7 +5,7 @@ export const THEME_IDS = ['paper', 'ebony', 'ink', 'classic'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export const DEFAULT_THEME: ThemeId = 'paper';
 
-export type Mode = 'tap'; // 里程碑 B 加 'play'（跟弹）
+export type Mode = 'tap' | 'play'; // 认音 / 跟弹（里程碑 B §27，2026-09-06）
 
 export interface Progress {
   stage: number;
