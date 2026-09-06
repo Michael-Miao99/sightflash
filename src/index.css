@@ -96,7 +96,7 @@ button.sel:disabled { opacity: .4; }
 button.sel.small { padding: 6px 12px; }
 button.danger { color: var(--danger-text); border-color: var(--danger-bd); }
 .note-btn { flex: 1; min-width: 0; aspect-ratio: 1; font-size: 1.35rem; border-radius: 12px; border: 1px solid var(--line); background: var(--ctrl-bg); color: var(--text); }
-/* 12 键音名板（练黑键=chromatic）：黑键键琥珀配色；竖屏极窄可换行 */
+/* 12 键音名板（练黑键=chromatic）：黑键键颜色随主题（双名标注） */
 .note-keys.chromatic { flex-wrap: wrap; row-gap: 6px; }
 .note-keys.chromatic .note-btn { flex: 1 1 36px; min-width: 0; max-width: 46px; font-size: 0.72rem; padding: 0 2px; }
 .note-btn.black-name { color: var(--black-name); border-color: var(--black-name-bd); }
@@ -128,7 +128,7 @@ button.danger { color: var(--danger-text); border-color: var(--danger-bd); }
   background: linear-gradient(var(--key-b-hi), var(--key-b-lo)); border: 1px solid var(--key-b-bd);
   border-radius: 0 0 3px 3px; }
 .piano .key.black:active { background: var(--key-b-act); }
-/* 中央C(C4) 唯一文字标注：白键下缘小字，避开其上黑键区（黑键高 62%）。字色偏琥珀、对照白键浅底 */
+/* 中央C(C4) 唯一文字标注：白键下缘小字，避开其上黑键区（黑键高 62%）。字色随主题、对照白键浅底 */
 .piano .key.white .c4 { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%);
   font-size: clamp(8px, 1.4vw, 12px); line-height: 1; font-weight: 600; color: var(--c4-label);
   pointer-events: none; user-select: none; }
