@@ -9,6 +9,9 @@ const ANCHOR_TOP = 26; // y=0（顶边）对应的全局步；y=(ANCHOR_TOP-g)*S
 const TREBLE_OFFSET = 12; // 高音行底线(E4)在低音行底线(G2)之上的全局步；中央 C 两谱同高 ⇒ 连续轴
 const W = 320;
 const H = 240;
+const STAFF_X1 = 76; // 五线左缘 x
+const STAFF_X2 = W - 10; // 五线右缘 x
+const CLEF_X = 52; // 谱号中心 x
 const NOTE_X = 216; // 符头中心 x（与 StaffView 同列，便于心理对齐）
 const RX = 7;
 const RY = 6;
@@ -25,7 +28,7 @@ const ACC_GLYPH: Record<Accidental, string> = { '#': '♯', b: '♭' };
 /** SVG y 向下增长；全局步越大音越高、y 越小。 */
 const stepY = (g: number) => (ANCHOR_TOP - g) * SPACE;
 
-/** 大括号路径：两段外弓 + 中央回折小横，近似钢琴谱贯通括号。x 在 [x0-?, x0+22] 内。 */
+/** 大括号路径：两段外弓 + 中央回折小横，近似钢琴谱贯通括号。外缘 x0，外凸至 x0+22，回折段 x0+4..x0+14。 */
 function bracePath(yTop: number, yBot: number): string {
   const mid = (yTop + yBot) / 2;
   const x0 = 8; // 括号外缘 x
@@ -49,20 +52,20 @@ export function GrandStaffView({ midi, clef, acc }: { midi: number; clef: Clef; 
     <div className="grand-staff">
       <svg data-testid="grand-staff" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', margin: '0 auto' }}>
         {BASS_LINE_STEPS.map((s) => (
-          <line key={`b${s}`} className="staff-line" x1={76} x2={W - 10} y1={stepY(s)} y2={stepY(s)}
+          <line key={`b${s}`} className="staff-line" x1={STAFF_X1} x2={STAFF_X2} y1={stepY(s)} y2={stepY(s)}
             stroke="#64748b" strokeWidth={1.5} />
         ))}
         {TREBLE_LINE_STEPS.map((s) => (
-          <line key={`t${s}`} className="staff-line" x1={76} x2={W - 10} y1={stepY(s)} y2={stepY(s)}
+          <line key={`t${s}`} className="staff-line" x1={STAFF_X1} x2={STAFF_X2} y1={stepY(s)} y2={stepY(s)}
             stroke="#64748b" strokeWidth={1.5} />
         ))}
         {/* 贯通括号：横跨低音行底到高音行顶，画在线下作为整体框架 */}
         <path data-testid="brace" d={bracePath(stepY(TREBLE_OFFSET + 9), stepY(-2))} fill="none"
           stroke="#cbd5e1" strokeWidth={2.5} />
         {/* 双谱号：各居其行中部（行中线 = 局部步 4） */}
-        <text data-testid="clef-bass" x={52} y={stepY(4)} dominantBaseline="central" textAnchor="middle"
+        <text data-testid="clef-bass" x={CLEF_X} y={stepY(4)} dominantBaseline="central" textAnchor="middle"
           fontSize={24} fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.bass}</text>
-        <text data-testid="clef-treble" x={52} y={stepY(TREBLE_OFFSET + 4)} dominantBaseline="central" textAnchor="middle"
+        <text data-testid="clef-treble" x={CLEF_X} y={stepY(TREBLE_OFFSET + 4)} dominantBaseline="central" textAnchor="middle"
           fontSize={26} fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.treble}</text>
         {acc != null && (
           <text data-testid="accidental" x={ACC_X} y={cy + 5} textAnchor="end" fontSize={15}

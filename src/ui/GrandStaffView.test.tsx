@@ -48,6 +48,13 @@ describe('GrandStaffView', () => {
     expect(cyOf(withAcc.container, 'ellipse.note-head')).toBe(cyOf(plain.container, 'ellipse.note-head'));
   });
 
+  it('acc="b" 黑键：锚在上方自然音（Db4 与 D4 同 cy，谱面 ♭）', () => {
+    const withAcc = render(<GrandStaffView midi={61} clef="treble" acc="b" />);
+    expect(withAcc.container.querySelector('[data-testid="accidental"]')!.textContent).toBe('♭');
+    const plain = render(<GrandStaffView midi={62} clef="treble" />);
+    expect(cyOf(withAcc.container, 'ellipse.note-head')).toBe(cyOf(plain.container, 'ellipse.note-head'));
+  });
+
   it('自然音不渲染记号元素', () => {
     const { container } = render(<GrandStaffView midi={60} clef="bass" />);
     expect(container.querySelector('[data-testid="accidental"]')).toBeNull();
