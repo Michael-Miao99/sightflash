@@ -425,7 +425,7 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 
 ### 27.2 判题语义：首击成败（play 专用，新增纯函数 `answerPlay`）
 - `core/session.ts` 新增 `export function answerPlay(s: Session, playedMidi: number): Session`（`playedMidi` 为起音的浮点 MIDI，见 27.3 `matches`），语义：
-  - **只判每题第一个起音**。新题未判过（`s.history[0]?.expectedMidi !== s.target.midi`，因 `chooseQuestion` 邻避保证新目标 midi 必与上题不同）→ 该音定此题：
+  - **只判每题第一个起音**。新题是否已判直接看状态机——停在本题当且仅当 `s.last` 是对本题首击错的定格（`s.last?.result==='wrong' && s.last?.expectedMidi===s.target.midi`）；推进/逃生后 `last` 只会是 `null` 或上一题记录，故**相邻同音的新题也判首击**，不依赖 `chooseQuestion` 的邻避（后者只是概率性重抽、非强保证；2026-09-06 终审由 `history[0]` 邻避判据改为状态机判据修复）→ 该音定此题：
     - `matches(playedMidi, s.target.midi)`（±30 音分，见 27.3）：记 `HistoryItem{correct}`、`total+1`、`correct+1`、`chooseQuestion` 推进下一题；
     - 否则：记 `{wrong}`、`total+1`、**题目停留**、`s.last` 置该次，继续听音。
   - **题目已判过（首击错、停留中）**：再弹错**不再记入 history / 不再 `total+1`**（试错不扣分）；**弹到对键**（`matches`）→ 推进下一题、**不新增记录**（此题成绩已按首击定格为错，仅 `s.last` 置一次 `correct` 供 ✓ 反馈）。
