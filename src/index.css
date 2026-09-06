@@ -29,6 +29,9 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
 .fb.ok { color: #4ade80; }
 .fb.bad { color: #f87171; }
 .staff-wrap { text-align: center; margin: 4px 0; }
+/* 大谱表容器（A2，混合模式） */
+.grand-staff { text-align: center; margin: 4px auto; }
+.grand-staff svg { display: block; margin: 0 auto; width: 100%; max-width: 250px; height: auto; }
 .chart { width: 100%; height: 100px; background: #0b1220; border-radius: 8px; }
 .err-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .err-row .bar { flex: 1; margin: 0; }
@@ -81,6 +84,12 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
   .practice .fb { min-height: 18px; margin: 0; font-size: 1rem; flex: none; }
   .practice .note-btn { max-width: 64px; aspect-ratio: auto; height: 32px; font-size: 1.1rem; border-radius: 8px; }
   .practice .note-keys.chromatic .note-btn { font-size: 0.95rem; max-width: 64px; }
+  /* 大谱表（A2 §25.3，混合模式）：高度驱动缩放——svg 无内联宽高、viewBox 320/240 等比。
+     横屏高度随视口 clamp（360→~150 / 375→~161 / 430→~185），宽度按纵横比自动 ≈1.33×高。
+     真机微调优先：此 clamp 值、GrandStaffView 的 SPACE/ANCHOR_TOP/TREBLE_OFFSET，
+     以及竖屏 .grand-staff svg 的 max-width。固定件合计≈86 + 谱面≈150 + 键盘≥108 ≈ 366（最紧档 360 恰好）。 */
+  .practice .grand-staff { flex: none; margin: 0 auto; }
+  .practice .grand-staff svg { width: auto; height: clamp(150px, 43dvh, 186px); }
   .practice .piano {
     flex: 1 1 0;
     min-height: 108px;
