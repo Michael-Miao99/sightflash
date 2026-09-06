@@ -26,26 +26,26 @@ export function StaffView({ midi, clef, acc }: { midi: number; clef: Clef; acc?:
       <svg data-testid="staff" viewBox={`0 0 ${SVG_W} ${H}`} style={{ width: '100%', maxWidth: 320, display: 'block', margin: '0 auto' }}>
         {/* 谱号：基线大致落在谱中央附近 */}
         <text data-testid="clef" x={14} y={stepToY(clef === 'treble' ? 2 : 0) + 6} fontSize={52}
-          fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">
+          style={{ fill: 'var(--staff-soft)' }} fontFamily="'Noto Music','Segoe UI Symbol',serif">
           {clefGlyph[clef]}
         </text>
         {LINES.map((l) => (
           <line key={l} className="staff-line" x1={60} x2={SVG_W - 16} y1={stepToY(l)} y2={stepToY(l)}
-            stroke="#64748b" strokeWidth={1.5} />
+            style={{ stroke: 'var(--staff-line)' }} strokeWidth={1.5} />
         ))}
         {acc != null && (
           <text data-testid="accidental" x={182} y={cy + 8} textAnchor="end" fontSize={30}
-            fill="#f8fafc" fontFamily="'Noto Music','Segoe UI Symbol',serif">
+            style={{ fill: 'var(--staff-note)' }} fontFamily="'Noto Music','Segoe UI Symbol',serif">
             {ACC_GLYPH[acc]}
           </text>
         )}
         {ledgerLines.map((l) => (
           <line key={l} className="ledger" x1={186} x2={246} y1={stepToY(l)} y2={stepToY(l)}
-            stroke="#cbd5e1" strokeWidth={1.5} />
+            style={{ stroke: 'var(--staff-soft)' }} strokeWidth={1.5} />
         ))}
-        <ellipse className="note-head" cx={216} cy={cy} rx={10} ry={8} fill="#f8fafc"
+        <ellipse className="note-head" cx={216} cy={cy} rx={10} ry={8} style={{ fill: 'var(--staff-note)' }}
           transform={`rotate(-20 216 ${cy})`} />
-        <line x1={224} x2={228} y1={cy - 4} y2={cy - 46} stroke="#f8fafc" strokeWidth={2.5} />
+        <line x1={224} x2={228} y1={cy - 4} y2={cy - 46} style={{ stroke: 'var(--staff-note)' }} strokeWidth={2.5} />
       </svg>
     </div>
   );

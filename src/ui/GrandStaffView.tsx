@@ -53,34 +53,34 @@ export function GrandStaffView({ midi, clef, acc }: { midi: number; clef: Clef; 
       <svg data-testid="grand-staff" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', margin: '0 auto' }}>
         {BASS_LINE_STEPS.map((s) => (
           <line key={`b${s}`} className="staff-line" x1={STAFF_X1} x2={STAFF_X2} y1={stepY(s)} y2={stepY(s)}
-            stroke="#64748b" strokeWidth={1.5} />
+            style={{ stroke: 'var(--staff-line)' }} strokeWidth={1.5} />
         ))}
         {TREBLE_LINE_STEPS.map((s) => (
           <line key={`t${s}`} className="staff-line" x1={STAFF_X1} x2={STAFF_X2} y1={stepY(s)} y2={stepY(s)}
-            stroke="#64748b" strokeWidth={1.5} />
+            style={{ stroke: 'var(--staff-line)' }} strokeWidth={1.5} />
         ))}
         {/* 贯通括号：横跨低音行底到高音行顶，画在线下作为整体框架 */}
         <path data-testid="brace" d={bracePath(stepY(TREBLE_OFFSET + 9), stepY(-2))} fill="none"
-          stroke="#cbd5e1" strokeWidth={2.5} />
+          style={{ stroke: 'var(--staff-soft)' }} strokeWidth={2.5} />
         {/* 双谱号：各居其行中部（行中线 = 局部步 4） */}
         <text data-testid="clef-bass" x={CLEF_X} y={stepY(4)} dominantBaseline="central" textAnchor="middle"
-          fontSize={24} fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.bass}</text>
+          fontSize={24} style={{ fill: 'var(--staff-soft)' }} fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.bass}</text>
         <text data-testid="clef-treble" x={CLEF_X} y={stepY(TREBLE_OFFSET + 4)} dominantBaseline="central" textAnchor="middle"
-          fontSize={26} fill="#cbd5e1" fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.treble}</text>
+          fontSize={26} style={{ fill: 'var(--staff-soft)' }} fontFamily="'Noto Music','Segoe UI Symbol',serif">{CLEF_GLYPH.treble}</text>
         {acc != null && (
           <text data-testid="accidental" x={ACC_X} y={cy + 5} textAnchor="end" fontSize={15}
-            fill="#f8fafc" fontFamily="'Noto Music','Segoe UI Symbol',serif">{ACC_GLYPH[acc]}</text>
+            style={{ fill: 'var(--staff-note)' }} fontFamily="'Noto Music','Segoe UI Symbol',serif">{ACC_GLYPH[acc]}</text>
         )}
         {ledgerLines.map((l) => {
           const lg = l + offset; // 加线局部步 → 全局步（中央 C 两谱共全局 10）
           return (
             <line key={l} className="ledger" x1={LEDGER_X1} x2={LEDGER_X2} y1={stepY(lg)} y2={stepY(lg)}
-              stroke="#cbd5e1" strokeWidth={1.5} />
+              style={{ stroke: 'var(--staff-soft)' }} strokeWidth={1.5} />
           );
         })}
-        <ellipse className="note-head" cx={NOTE_X} cy={cy} rx={RX} ry={RY} fill="#f8fafc"
+        <ellipse className="note-head" cx={NOTE_X} cy={cy} rx={RX} ry={RY} style={{ fill: 'var(--staff-note)' }}
           transform={`rotate(-20 ${NOTE_X} ${cy})`} />
-        <line x1={NOTE_X + 8} x2={NOTE_X + 12} y1={cy - 3} y2={cy - 3 - STEM} stroke="#f8fafc" strokeWidth={2} />
+        <line x1={NOTE_X + 8} x2={NOTE_X + 12} y1={cy - 3} y2={cy - 3 - STEM} style={{ stroke: 'var(--staff-note)' }} strokeWidth={2} />
       </svg>
     </div>
   );

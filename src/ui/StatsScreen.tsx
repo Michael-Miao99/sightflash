@@ -27,7 +27,7 @@ export function StatsScreen() {
               {trend.map((p, i) => {
                 const x = trend.length > 1 ? (i / (trend.length - 1)) * 290 + 5 : 150;
                 const y = 90 - (p.value / maxSpeed) * 80;
-                return <circle key={i} cx={x} cy={y} r={3} fill="#38bdf8" />;
+                return <circle key={i} cx={x} cy={y} r={3} style={{ fill: 'var(--accent)' }} />;
               })}
             </svg>
           )}
