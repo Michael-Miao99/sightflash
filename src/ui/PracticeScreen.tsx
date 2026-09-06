@@ -60,7 +60,8 @@ export function PracticeScreen() {
   const [hintMsg, setHintMsg] = useState(ROTATE_HINT_BASE);
 
   // ---- 跟弹开关（§28 唯一入口）：开 → 授权监听麦克风、判分统一"首击成败"；关 → 认音原样 ----
-  const [playOn, setPlayOn] = useState(false);
+  // 默认沿用上次开关状态（settings.followPlay，§28 老板追加）；老档缺字段兜底 false
+  const [playOn, setPlayOn] = useState(() => state.settings.followPlay ?? false);
   const [micMsg, setMicMsg] = useState('');
   const [flash, setFlash] = useState(false); // 判对停留中：谱面仍旧音、显示绿✓
   const holding = useRef(false); // 停留窗内吞掉所有作答（旧音余音/补按）
@@ -103,25 +104,40 @@ export function PracticeScreen() {
     const on = e.target.checked;
     if (finished.current) return;
     setPlayOn(on);
+    // 记回 settings.followPlay：进练习屏默认沿用上次开关状态（§28 老板追加）
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, followPlay: on } }));
     if (!on) { mic.stop(); setMicMsg(''); return; }
     everPlay.current = true; // 开过即按 play 记录（§28 数据页）
     setMicMsg('');
     mic.request().catch(() => {}); // micSource 已吞错，兜底
   }
 
-  // 麦克风终态仲裁：running=在听；requesting=授权中等待；其余（denied/unsupported/error/idle=中断）→ 自动关回并提示，
+  // 开机默认沿用上次跟弹偏好（settings.followPlay，§28 老板追加）：mount 即自动请求授权。
+  // 请求可能落在用户手势外——桌面在瞬态激活窗口内通常直接成功；iOS 若要求手势会落 denied，
+  // 由下方仲裁回关提示，用户点开关重开即在手势内；suspended 的 AudioContext 由 micSource 挂首个手势恢复臂兜底。
+  useEffect(() => {
+    if (finished.current) return;
+    if (!(state.settings.followPlay ?? false)) return;
+    everPlay.current = true;
+    mic.request().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 麦克风终态仲裁：running=在听；requesting=授权中等待；denied/unsupported/error → 自动关回并提示；
+  // idle 仅"曾 running 后中断"（wasRunning）才回关——开机沿用跟弹、请求落定前状态也是 idle，不得误关。
   // 不中断本轮认音（认音不依赖麦克风）。流中断不再提前结算（§28 取代旧 §27.7）。
   useEffect(() => {
     if (!playOn || finished.current) return;
     if (mic.status === 'running') { wasRunning.current = true; return; }
     if (mic.status === 'requesting') return; // 授权弹窗等待中
+    if (mic.status === 'idle' && !wasRunning.current) return; // 请求尚未落定（idle→requesting 竞态），等下轮状态
     setPlayOn(false);
     mic.stop();
     setMicMsg(
       mic.status === 'denied' ? '麦克风授权被拒，仍可用音名/琴键作答'
         : mic.status === 'unsupported' ? '此设备/浏览器不支持麦克风，仍可用音名/琴键作答'
           : mic.status === 'error' ? '麦克风出错，已关闭跟弹'
-            : (wasRunning.current ? '麦克风中断，已自动关闭（可重新打开）' : ''),
+            : '麦克风中断，已自动关闭（可重新打开）',
     );
     wasRunning.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps

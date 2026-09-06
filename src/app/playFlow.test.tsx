@@ -220,6 +220,53 @@ describe('统一首击判分与判对消隐（§28，可注入起音）', () => 
   });
 });
 
+describe('跟弹开关默认沿用上次状态（settings.followPlay，§28 老板追加）', () => {
+  /** seed followPlay=true 直进练习屏 */
+  async function goPracticeFollowOn(): Promise<UserEvent> {
+    const u = userEvent.setup();
+    render(<AppRoot repoKind="memory" seed={{ followPlay: true }} />);
+    await screen.findByText(/五线速读/);
+    await u.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await u.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByTestId('staff');
+    return u;
+  }
+
+  it('上次开过跟弹 → 进屏开关默认开、自动请求授权、授权后保持开（界面无差别）', async () => {
+    await goPracticeFollowOn();
+    expect(toggleChecked()).toBe(true); // 默认沿用上次的开
+    expect(mic.micRequest).toHaveBeenCalled(); // 开机即自动请求（无需再点开关）
+    await act(async () => { mic._set('running'); });
+    expect(toggleChecked()).toBe(true);
+    expect(screen.getByTestId('feedback')).toBeInTheDocument(); // 作答面全在
+    expect(document.querySelector('.practice > .piano')).not.toBeNull();
+  });
+
+  it('上次开过但授权被拒 → 自动回关并提示，本轮认音不打断、不提前结算', async () => {
+    const u = await goPracticeFollowOn();
+    await act(async () => { mic._set('denied'); });
+    expect(toggleChecked()).toBe(false);
+    expect(screen.getByTestId('mic-msg')).toHaveTextContent(/被拒/);
+    expect(screen.queryByText('本轮完成')).toBeNull();
+    await u.click(document.querySelectorAll('.note-btn')[0]!);
+    expect(screen.getByTestId('feedback').textContent).toMatch(/✓|✗/); // 认音照常
+  });
+
+  it('默认关（seed 缺省）：上次未开 → 进屏开关关、不自动请求授权', async () => {
+    await goPractice();
+    expect(toggleChecked()).toBe(false);
+    expect(mic.micRequest).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => {
+    cleanup();
+    mic._set('idle');
+    mic.micStop.mockClear();
+    mic.micRequest.mockClear();
+  });
+});
+
 describe('StrictMode 开发态不误杀（§28）', () => {
   it('双挂载后仍在练习屏正常倒计时，不直接跳本轮完成', async () => {
     const u = userEvent.setup();

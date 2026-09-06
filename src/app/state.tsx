@@ -7,11 +7,13 @@ import type { MixedClef } from '../core/generator/stages';
 
 export type View = 'home' | 'setup' | 'practice' | 'result' | 'stats' | 'settings';
 
-/** 测试缝：以 AppRoot/AppProvider 的 seed 覆盖初始 progress.stage 与 settings.lastClef。
+/** 测试缝：以 AppRoot/AppProvider 的 seed 覆盖初始 progress.stage 与 settings 部分字段。
  *  缺省 = initialState()，与产品行为完全一致；自动路径仍以 IndexedDB 首次载入为准。 */
 export interface SeedState {
   stage?: number;
   lastClef?: MixedClef;
+  /** 跟弹开关沿用偏好（settings.followPlay，§28 后老板追加）测试覆盖用 */
+  followPlay?: boolean;
 }
 
 export function seededState(seed?: SeedState): AppState {
@@ -23,6 +25,7 @@ export function seededState(seed?: SeedState): AppState {
     settings: {
       ...def.settings,
       lastClef: seed.lastClef ?? def.settings.lastClef,
+      followPlay: seed.followPlay ?? def.settings.followPlay,
     },
   };
 }

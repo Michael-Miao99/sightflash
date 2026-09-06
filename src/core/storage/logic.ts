@@ -6,7 +6,7 @@ export const DAILY_GOAL = 100;
 export function defaultState(): AppState {
   return {
     progress: { stage: 1, wrong: {} },
-    settings: { sound: true, durationSec: 60, lastMode: 'tap', lastClef: 'treble', gamut: 'natural', theme: DEFAULT_THEME },
+    settings: { sound: true, durationSec: 60, lastMode: 'tap', lastClef: 'treble', gamut: 'natural', theme: DEFAULT_THEME, followPlay: false },
     streak: { current: 0, lastDate: '' },
     daily: { date: '', correct: 0 },
   };

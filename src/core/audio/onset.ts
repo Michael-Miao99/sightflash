@@ -11,8 +11,8 @@ export interface OnsetEvent {
   cents: number;
 }
 
-export const RMS_ON = 0.03;          // 有音能量阈（进入候选）
-export const RMS_OFF = 0.008;        // 静音阈（松键复位，低于它允许重触发）
+export const RMS_ON = 0.02;          // 有音能量阈（进入候选）——真机偏弱弹奏触发不灵，调低（老板，2026-09-07）
+export const RMS_OFF = 0.006;        // 静音阈（松键复位，低于它允许重触发）
 export const STABLE_FRAMES = 2;      // 音高稳定所需连续帧（≈86ms@48ms/帧）
 export const CENTS_LOCK = 25;        // 稳定判定内音高漂移上限(¢)
 export const PITCH_CHANGE_SEMI = 1.5; // 换音判别的半音跨度（同键持续不重触发）

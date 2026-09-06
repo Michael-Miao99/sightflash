@@ -19,6 +19,8 @@ export interface Settings {
   lastClef: MixedClef;
   gamut: Gamut; // 练黑键（变化音）全局开关
   theme: ThemeId; // 主题（§26）：paper|ebony|ink|classic，缺省回落 DEFAULT_THEME
+  /** 跟弹开关沿用偏好（§28 定稿后老板追加）：进练习屏默认带上次开/关状态；缺省 false（老档兜底） */
+  followPlay: boolean;
 }
 
 export interface Streak {

@@ -30,6 +30,9 @@ let frameNo = 0;
 let sampleBuf: Float32Array<ArrayBuffer> | null = null;
 let handlers: MicHandlers | null = null;
 const gate = new OnsetGate();
+// 授权成功但 AudioContext 仍 suspended 时的恢复臂：浏览器 autoplay 策略要求 user gesture 才能 running，
+// §28 后开机默认沿用跟弹、请求可能落在手势外 → 首个 pointerdown/keydown 即 resume（once，用完自清）。
+let resumeArm: (() => void) | null = null;
 
 export function micGetStatus(): MicStatus {
   return status;
@@ -110,7 +113,11 @@ export async function micRequest(): Promise<MicStatus> {
     stream = st;
     gate.reset();
     frameNo = 0;
-    if (ctx.state !== 'running') void ctx.resume().catch(() => {}); // 兜底：connect 后仍 suspended 再试一次
+    if (ctx.state !== 'running') {
+      // 兜底：connect 后仍 suspended（autoplay 策略）→ 直接试一次 + 挂手势恢复臂
+      void ctx.resume().catch(() => {});
+      armResumeOnGesture(ctx);
+    }
     setStatus('running');
     // 流中断（后台/权限被撤）→ 立即释放，UI 订阅可感知并提前结算（§27.7）
     for (const t of st.getAudioTracks()) {
@@ -140,8 +147,26 @@ export function micSetHandlers(h: MicHandlers | null): void {
   if (status === 'running' && !rafId) rafId = requestAnimationFrame(tick);
 }
 
+/** 授权后等首个手势解锁 suspended 的 AudioContext（autoplay 策略；once，幂等）。 */
+function armResumeOnGesture(ctx: AudioContext): void {
+  if (resumeArm) resumeArm(); // 旧的先撤，防重复挂监听
+  const h = () => {
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+    disarm();
+  };
+  const disarm = () => {
+    window.removeEventListener('pointerdown', h);
+    window.removeEventListener('keydown', h);
+    resumeArm = null;
+  };
+  window.addEventListener('pointerdown', h, { passive: true });
+  window.addEventListener('keydown', h);
+  resumeArm = disarm;
+}
+
 /** 释放媒体流并复位（练习到点结算 / 校准页离开回 setup）。幂等。 */
 export function micStop(): void {
+  if (resumeArm) { resumeArm(); resumeArm = null; }
   setStatus('idle');
   cancelAnimationFrame(rafId);
   rafId = 0;
