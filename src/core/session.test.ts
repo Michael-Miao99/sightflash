@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createSession, answerTap, answerKey, computeWrongDeltas } from './session';
+import { createSession, answerTap, answerKey, answerPlay, skipQuestion, computeWrongDeltas } from './session';
 import type { Session } from './session';
 import { mulberry32 } from './generator/generator';
 import { LETTER_PC } from './notation/note';
@@ -126,5 +126,65 @@ describe('session 变化音 gamut 穿透', () => {
     expect(ok.last?.result).toBe('correct');
     expect(ok.correct).toBe(wrong.correct + 1);
     expect(ok.target).not.toBe(wrong.target); // 推进换新题对象
+  });
+});
+
+describe('answerPlay 首击成败（跟弹，§27.2）', () => {
+  it('首击命中（±30¢）：correct+1、total+1、记录对、推进下一题', () => {
+    const s = makeSession(60); // C4
+    const next = answerPlay(s, 60.2);
+    expect(next.last?.result).toBe('correct');
+    expect(next.correct).toBe(1);
+    expect(next.total).toBe(1);
+    expect(next.history[0]).toMatchObject({ result: 'correct', expectedMidi: 60, actualPc: 0 });
+    expect(next.target).not.toBe(s.target); // 推进
+  });
+
+  it('首击偏 40¢ 判错：记错、停留、可重试', () => {
+    const s = makeSession(60);
+    const next = answerPlay(s, 60.4); // 40¢ > 30¢ 容差
+    expect(next.last?.result).toBe('wrong');
+    expect(next.correct).toBe(0);
+    expect(next.total).toBe(1);
+    expect(next.history[0]).toMatchObject({ result: 'wrong', expectedMidi: 60 });
+    expect(next.target).toBe(s.target); // 停留
+  });
+
+  it('首击弹错键(C5=72)判错；同题再错不增 total 不新增记录；终于弹对→推进且不新增记录', () => {
+    const s = makeSession(60);
+    const w = answerPlay(s, 72);
+    expect(w.history).toHaveLength(1);
+    expect(w.total).toBe(1);
+
+    const w2 = answerPlay(w, 79); // 仍在错（试错，不扣分）
+    expect(w2.correct).toBe(0);
+    expect(w2.total).toBe(1); // 试错不增 total
+    expect(w2.history).toHaveLength(1); // 不新增记录
+
+    const ok = answerPlay(w2, 60.1); // 终于弹对
+    expect(ok.last?.result).toBe('correct'); // ✓ 反馈有
+    expect(ok.correct).toBe(0); // 首击已定格为错 → correct 不再加
+    expect(ok.total).toBe(1);
+    expect(ok.history).toHaveLength(1); // 不新增记录
+    expect(ok.target).not.toBe(w2.target); // 推进换新题
+  });
+
+  it('skipQuestion：停留的错题逃生→推进、total/history 不变、last 清空', () => {
+    const s = makeSession(60);
+    const w = answerPlay(s, 72); // 首击错、停留
+    const sk = skipQuestion(w);
+    expect(sk.total).toBe(1);
+    expect(sk.history).toHaveLength(1);
+    expect(sk.correct).toBe(0);
+    expect(sk.target).not.toBe(w.target); // 邻避：新目标 ≠ 旧目标
+    expect(sk.last).toBeNull();
+  });
+
+  it('同音名错八度恒判错（±30¢≪半音 ⇒ 蕴含八度一致）', () => {
+    const s = makeSession(60);
+    const next = answerPlay(s, 72); // C5（同音名高八度）
+    expect(next.last?.result).toBe('wrong');
+    expect(next.correct).toBe(0);
+    expect(next.total).toBe(1);
   });
 });

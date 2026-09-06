@@ -1,6 +1,8 @@
 import type { MixedClef, Gamut } from './generator/stages';
 import { chooseQuestion } from './generator/generator';
 import type { Question } from './generator/generator';
+import type { Mode } from './storage/types';
+import { matches } from './audio/pitch';
 
 export type ResultKind = 'correct' | 'wrong';
 
@@ -21,6 +23,8 @@ export interface SessionConfig {
   rng: () => number;
   wrong: Record<number, number>;
   gamut?: Gamut;
+  /** 本轮模式（认音 tap / 跟弹 play）；透传展示用，判题不走它 */
+  mode?: Mode;
 }
 
 export interface Session {
@@ -30,6 +34,8 @@ export interface Session {
   rng: () => number;
   wrong: Record<number, number>;
   gamut?: Gamut;
+  /** 本轮模式（认音 tap / 跟弹 play）；透传展示用，判题不走它 */
+  mode?: Mode;
   target: Question;
   correct: number;
   total: number;
@@ -76,6 +82,45 @@ export function answerKey(s: Session, midi: number): Session {
   const history = [item, ...s.history];
   const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi, s.gamut) : s.target;
   return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
+}
+
+/**
+ * 跟弹作答（pure，§27.2 首击成败）：playedMidi 为起音的实际浮点 MIDI（可含音分偏差）。
+ * 只判每题第一个起音：未判过（history[0].expectedMidi !== 当前 target.midi，邻避保证其必不同）
+ * → 命中(matches ±30¢)记 correct 并推进；不中记 wrong 停留。
+ * 题目已判过（首击错、停留中）→ 试错不再记 history / 不 total+1；终于弹对(matches)推进、不新增记录，
+ * 仅 last 置一次 correct 供 ✓ 反馈。
+ * 判定粒度 ±30¢≪半音 ⇒ 同音自动蕴含八度一致（无需单列八度比较）。
+ */
+export function answerPlay(s: Session, playedMidi: number): Session {
+  const target = s.target;
+  const ok = matches(playedMidi, target.midi);
+  const roundMidi = Math.round(playedMidi);
+  const item: HistoryItem = {
+    result: ok ? 'correct' : 'wrong',
+    expectedMidi: target.midi,
+    expectedPc: target.midi % 12,
+    actualPc: ((roundMidi % 12) + 12) % 12,
+  };
+  const firstShot = s.history[0]?.expectedMidi !== target.midi; // 该题首击是否已定
+  const advance = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, target.midi, s.gamut) : target;
+  if (firstShot) {
+    return {
+      ...s, target: advance,
+      correct: s.correct + (ok ? 1 : 0), total: s.total + 1,
+      history: [item, ...s.history], last: item,
+    };
+  }
+  return { ...s, target: advance, last: item }; // 试错：不改计数/历史；ok 时 last=correct 供反馈
+}
+
+/**
+ * 逃生（pure，§27.5 [下一题]）：把"首击已判错、停留"的题强行推进，此题成绩已定格。
+ * 不改 total/correct/history；last 清空（新题未弹过，回到待听状态）。
+ */
+export function skipQuestion(s: Session): Session {
+  const target = chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi, s.gamut);
+  return { ...s, target, last: null };
 }
 
 export interface WrongDeltas {
