@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/state';
-import { createSession, answerTap, answerKey, answerPlay, skipQuestion } from '../core/session';
+import { createSession, answerTap, answerKey, answerFirstShot, skipQuestion } from '../core/session';
+import type { FirstShotAnswer } from '../core/session';
 import { finalizeSession } from '../core/finalize';
 import { mulberry32 } from '../core/generator/generator';
-import { spelledName, LETTER_PC, midiToName } from '../core/notation/note';
+import { spelledName, LETTER_PC } from '../core/notation/note';
 import { playPiano } from './piano.ts';
 import { requestLandscape } from './landscape';
 import { StaffView } from './StaffView';
@@ -12,12 +13,14 @@ import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 import { useMicPitch } from './useMicPitch';
 import { AdvanceBlank } from './advanceBlank';
-import { matches, deviationLabel, roundToMidi } from '../core/audio/pitch';
 import type { OnsetEvent } from '../core/audio/onset';
 
 const ROTATE_HINT_BASE = '横屏使用键位更宽 ↻';
 const ROTATE_HINT_MANUAL = '请手动旋转手机 ↻';
-const PLAY_IDLE = '对着麦克风，弹出谱面上的音';
+// 认音/跟弹共用一句引导（§28 界面无差别）：弹出 = 真琴（跟弹）或屏上琴键，点出 = 音名板
+const IDLE_HINT = '看谱，弹出或用音名点出这个音';
+/** 判对停留窗：绿✓ 期间屏面不变，短暂停留再换题——上一音还有余音也不误判，前后两音不混淆（§28） */
+const CORRECT_HOLD_MS = 350;
 
 /** 音名板键定义：label 按钮文字；pc 判对音级；black 黑键键（双名、配色区分） */
 interface BoardKey { label: string; pc: number; black: boolean; }
@@ -37,35 +40,49 @@ const CHROMATIC_KEYS: BoardKey[] = (() => {
   return Array.from({ length: 12 }, (_, pc) => byPc.get(pc)!);
 })();
 
-/** 跟弹（play）反馈瞬态：text 为文案；kind 映射对错样式（tap 反馈不经此，直接由 sess.last 推导） */
-type FbState = { kind: 'idle' | 'ok' | 'bad'; text: string };
-
 export function PracticeScreen() {
   const { state, setState, repo, go } = useApp();
   const gamut = state.settings.gamut ?? 'natural'; // 老存档缺字段按 natural
-  const mode = state.settings.lastMode ?? 'tap'; // 老存档缺字段按认音
-  const isPlay = mode === 'play';
   const cfg = {
     stage: state.progress.stage,
     clef: state.settings.lastClef,
     durationSec: state.settings.durationSec,
     gamut,
-    mode,
   };
   const seed = useRef(Math.floor(Math.random() * 2 ** 31));
   const [sess, setSess] = useState(() =>
     createSession({ ...cfg, rng: mulberry32(seed.current), wrong: state.progress.wrong }),
   );
+  const sessRef = useRef(sess);
+  sessRef.current = sess; // 事件回调里读最新会话（避免依赖 setSess 结果才能判定）
   const [left, setLeft] = useState(cfg.durationSec);
   const finished = useRef(false);
   const [hintMsg, setHintMsg] = useState(ROTATE_HINT_BASE);
 
-  // ---- 跟弹（play）专用瞬态：反馈 / 逃生 / 静默提示 / 实时听音 ----
-  const [fb, setFb] = useState<FbState>({ kind: 'idle', text: isPlay ? PLAY_IDLE : '' });
-  const [showHint, setShowHint] = useState(false);
-  const [quiet, setQuiet] = useState(0);
+  // ---- 跟弹开关（§28 唯一入口）：开 → 授权监听麦克风、判分统一"首击成败"；关 → 认音原样 ----
+  const [playOn, setPlayOn] = useState(false);
+  const [micMsg, setMicMsg] = useState('');
+  const [flash, setFlash] = useState(false); // 判对停留中：谱面仍旧音、显示绿✓
+  const holding = useRef(false); // 停留窗内吞掉所有作答（旧音余音/补按）
+  const holdTimer = useRef<number>(0);
+  const everPlay = useRef(false); // 本轮是否开过跟弹（决定记录 mode=play）
   const wasRunning = useRef(false);
-  const mic = useMicPitch({ onOnset: onPlayOnset }); // tap 不 request → 无起音事件；onPlayOnset 内又按 isPlay 双保险
+
+  // 换题消隐窗（§27 补）：判对推进/逃生换题后短窗内吞上一音余音起音（时序域，见 advanceBlank.ts）
+  const blank = useRef(new AdvanceBlank());
+  // 静默提示（跟弹）：同题 N 秒无作答 → 轻提示（不扣分不卡题）
+  const [quiet, setQuiet] = useState(0);
+
+  const sound = state.settings.sound;
+
+  // 麦克风 handlers。真琴起音 → 统一首击判定（playOn 双保险：未开 / 关掉后模块不会来事件）
+  function handleOnset(e: OnsetEvent) {
+    if (!playOn || finished.current || holding.current) return;
+    if (blank.current.blanked()) return; // 换题消隐窗内：旧音余音/重音头，非本题作答，丢弃
+    const played = e.midi + e.cents / 100;
+    submitFirst({ kind: 'onset', playedMidi: played }, false);
+  }
+  const mic = useMicPitch({ onOnset: handleOnset });
 
   // 倒计时
   useEffect(() => {
@@ -73,38 +90,56 @@ export function PracticeScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // 跟弹静默提示：换题复位；同题 10s 无起音 → 轻提示（不扣分不卡题，§27.7）
+  // 跟弹静默提示：换题复位；开跟弹且麦克风在听时逐秒累计
   useEffect(() => { setQuiet(0); }, [sess.target.midi]);
   useEffect(() => {
-    if (!isPlay) return;
+    if (!playOn) return;
     const t = setInterval(() => setQuiet((q) => q + 1), 1000);
     return () => clearInterval(t);
-  }, [isPlay]);
-  const quietWarn = isPlay && !finished.current && quiet >= 10;
+  }, [playOn]);
 
-  // 换题消隐窗（§27 补）：判对推进/逃生换题后短窗内吞掉上一音的余音起音，防误判新题。
-  // 用 ref 持实例（render 间不变）；纯逻辑见 advanceBlank.ts。
-  const blank = useRef(new AdvanceBlank());
+  // 开关→授权（用户手势内）：开即 request；关即 stop。授权失败/流中断由状态订阅回弹开关（见下）
+  function onToggleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const on = e.target.checked;
+    if (finished.current) return;
+    setPlayOn(on);
+    if (!on) { mic.stop(); setMicMsg(''); return; }
+    everPlay.current = true; // 开过即按 play 记录（§28 数据页）
+    setMicMsg('');
+    mic.request().catch(() => {}); // micSource 已吞错，兜底
+  }
 
-  // 流中断（后台/权限被撤）→ 提前结算：走同一条倒计时结算路径（§27.7）
+  // 麦克风终态仲裁：running=在听；requesting=授权中等待；其余（denied/unsupported/error/idle=中断）→ 自动关回并提示，
+  // 不中断本轮认音（认音不依赖麦克风）。流中断不再提前结算（§28 取代旧 §27.7）。
   useEffect(() => {
-    if (!isPlay) return;
-    if (mic.status === 'running') wasRunning.current = true;
-    if (wasRunning.current && mic.status !== 'running' && !finished.current) {
-      setLeft(0); // timer 结算 effect 接管（含 mic.stop + finalize + go result）
-    }
-  }, [mic.status, isPlay]);
+    if (!playOn || finished.current) return;
+    if (mic.status === 'running') { wasRunning.current = true; return; }
+    if (mic.status === 'requesting') return; // 授权弹窗等待中
+    setPlayOn(false);
+    mic.stop();
+    setMicMsg(
+      mic.status === 'denied' ? '麦克风授权被拒，仍可用音名/琴键作答'
+        : mic.status === 'unsupported' ? '此设备/浏览器不支持麦克风，仍可用音名/琴键作答'
+          : mic.status === 'error' ? '麦克风出错，已关闭跟弹'
+            : (wasRunning.current ? '麦克风中断，已自动关闭（可重新打开）' : ''),
+    );
+    wasRunning.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mic.status, playOn]);
 
   // 时间到 → 结算 → 落库（先落库成功再跳转，保证 ResultScreen 能读到最新记录）
   useEffect(() => {
     if (left > 0 || finished.current) return;
     finished.current = true;
+    clearTimeout(holdTimer.current);
+    holding.current = false;
+    mic.stop(); // 练习结束统一释放（幂等）
     const now = new Date();
     const { progress, streak, daily, record } = finalizeSession(state, {
       correct: sess.correct, total: sess.total, durationSec: cfg.durationSec,
-      history: sess.history, stage: cfg.stage, clef: cfg.clef, mode, ts: now.getTime(),
+      history: sess.history, stage: cfg.stage, clef: cfg.clef,
+      mode: everPlay.current ? 'play' : 'tap', ts: now.getTime(),
     });
-    if (isPlay) mic.stop(); // 练习结束统一释放（§27.3）
     repo.addSession(record)
       .catch((e) => console.warn('addSession failed', e))
       .finally(() => {
@@ -114,47 +149,64 @@ export function PracticeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);
 
-  // 离开练习屏的唯一出口是结算 effect（已 if (isPlay) mic.stop()）；浏览器刷新/关闭由页面卸载自动释放流。
-  // 注意：勿在此加"卸载即 mic.stop()"兜底 —— React StrictMode 开发态首挂会模拟一次卸载再重挂，
-  // 会把校准页沿用进来的 running 流误杀，触发流中断提前结算（§27.3 沿用语义与它冲突）。
-  const sound = state.settings.sound;
+  // 离开练习屏（结算跳 result / 其它卸载）统一停麦。StrictMode 首挂模拟卸载时未开麦，stop 幂等无害；
+  // 本版已无"校准页沿用流"，卸载停麦不会误杀任何继续使用的流（§28 取代旧沿用语义）。
+  useEffect(() => () => { clearTimeout(holdTimer.current); mic.stop(); }, []);
 
-  // ---- 跟弹：起音 → 判题（首击成败，§27.2）----
-  function onPlayOnset(e: OnsetEvent): void {
-    if (!isPlay) return;
-    if (blank.current.blanked()) return; // 换题消隐窗内：上一音余音/重音头，非本题作答，丢弃（§27 补）
-    const played = e.midi + e.cents / 100; // 实际音高（含音分偏差）
-    const target = sess.target.midi;
-    const ok = matches(played, target);
-    if (ok) blank.current.shield(); // 命中即换题 → 开窗吞紧随的旧音尾（错则停留不 shield，可立即试弹）
-    playPiano(sound, ok ? target : e.midi); // 判对播目标音、判错播实际作答音（仅作确认，§20.2）
-    setFb({ kind: ok ? 'ok' : 'bad', text: ok ? '✓ 对！' : deviationLabel(played, target) });
-    setQuiet(0);
-    setSess((s) => answerPlay(s, played));
+  // ---- 统一首击判分（§28）：只走 answerFirstShot 一处判题，ok 以返回会话定格为准 ----
+  function submitFirst(src: FirstShotAnswer, wasOnset: boolean) {
+    const nxt = answerFirstShot(sessRef.current, src);
+    const ok = nxt.last?.result === 'correct';
+    if (!wasOnset) {
+      // 屏上作答合成反馈音：判对播目标音；判错播实际作答音（仅 pc 需补算八度，见下）
+      const target = sessRef.current.target.midi;
+      const actual = src.kind === 'pc' ? Math.floor(target / 12) * 12 + src.pc : src.kind === 'key' ? src.midi : target;
+      playPiano(sound, ok ? target : actual);
+    }
+    if (!ok) { setSess(nxt); setQuiet(0); return; } // 首击错/试错错：定格停留，✗ 由派生反馈显示
+    // 判对 → 绿✓ + 停留再换题；命中即记 pending（此刻 sess 未动，谱面仍旧音 + ✓）
+    holding.current = true;
+    setFlash(true);
+    clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => {
+      holding.current = false;
+      setFlash(false);
+      if (finished.current) return;
+      blank.current.shield(); // 换题开消隐窗：吞上一音余音/重音头（§27 补）
+      setSess(nxt);
+      setQuiet(0);
+    }, CORRECT_HOLD_MS);
   }
 
-  // ---- 跟弹逃生（§27.5）：首击判错停留后出现 ----
-  const stuck = isPlay && sess.last?.result === 'wrong';
+  // ---- 跟弹逃生（首击判错停留后出现 [下一题]）----
+  const stuck = playOn && sess.last?.result === 'wrong' && sess.last.expectedMidi === sess.target.midi;
   function onSkip() {
+    if (finished.current || holding.current) return;
     blank.current.shield(); // 逃生换题同开窗：吞旧音尾（§27 补）
     setSess((s) => skipQuestion(s));
-    setFb({ kind: 'idle', text: PLAY_IDLE });
-    setShowHint(false);
+    setFlash(false);
     setQuiet(0);
   }
 
-  // 音名板作答（按音级）：判对播目标音；判错播“所选音级 @ 谱面音符八度”的错音。（认音专用）
-  function onTap(pc: number) {
-    const target = sess.target.midi;
+  // 音名板作答（按音级）：跟弹开 → 统一首击；关 → 认音逐字现状
+  function onBoardPc(pc: number) {
+    if (finished.current || holding.current) return;
+    const s = sessRef.current;
+    const target = s.target.midi;
+    if (playOn) { submitFirst({ kind: 'pc', pc }, false); return; }
     const ok = pc === target % 12;
     playPiano(sound, ok ? target : Math.floor(target / 12) * 12 + pc);
-    setSess((s) => answerTap(s, pc));
+    setSess((ss) => answerTap(ss, pc));
+    setQuiet(0);
   }
 
-  // 琴键作答：按下立即播该键音；判定交给 answerKey（精确八度）。（认音专用）
-  function onKey(midi: number) {
+  // 琴键作答：跟弹开 → 统一首击（合成音由 submitFirst 播：对=该键/目标、错=该键）；关 → 按下即播该键音 + answerKey
+  function onPianoKey(midi: number) {
+    if (finished.current || holding.current) return;
+    if (playOn) { submitFirst({ kind: 'key', midi }, false); return; }
     playPiano(sound, midi);
-    setSess((s) => answerKey(s, midi));
+    setSess((ss) => answerKey(ss, midi));
+    setQuiet(0);
   }
 
   // 横屏提示：点击尝试全屏/锁定横屏；浏览器不支持时改为“请手动旋转”的提示。
@@ -165,72 +217,46 @@ export function PracticeScreen() {
   const clefName = cfg.clef === 'mixed' ? '大谱表' : cfg.clef === 'treble' ? '高音谱' : '低音谱';
   const chromatic = gamut === 'chromatic';
   const boardKeys = chromatic ? CHROMATIC_KEYS : NATURAL_KEYS;
-  const fbClass = fb.kind === 'ok' ? 'ok' : fb.kind === 'bad' ? 'bad' : '';
   const staff =
     cfg.clef === 'mixed'
       ? <GrandStaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />
       : <StaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />;
-  const liveText = mic.liveMidi === null ? '-' : midiToName(roundToMidi(mic.liveMidi));
+  // 反馈派生（两种模式同一条逻辑，界面无差别）：判对停留中绿✓；last=对 → ✓；last=本题错 → ✗ 揭晓音名；其余引导
+  const fbOk = flash || sess.last?.result === 'correct';
+  const fbBad = !fbOk && sess.last?.result === 'wrong' && sess.last.expectedMidi === sess.target.midi;
+  const quietWarn = playOn && mic.status === 'running' && !finished.current && !fbOk && quiet >= 10;
 
-  // ---- 认音（tap）：作答面 = 音名板 + 仿真琴键（与现状逐字一致）----
-  if (!isPlay) {
-    return (
-      <main className="screen practice">
-        <button type="button" className="rotate-hint" data-testid="rotate-hint" onClick={onRotateHint}>{hintMsg}</button>
-        <div className="row space-between">
-          <span>S{state.progress.stage} · {clefName}</span>
-          <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
-        </div>
-        {staff}
-        <div className={`fb ${sess.last === null ? 'none' : sess.last.result === 'correct' ? 'ok' : 'bad'}`} data-testid="feedback">
-          {sess.last === null
-            ? '看谱，点出这个音的名字（按钮或琴键）'
-            : sess.last.result === 'correct'
-              ? '✓ 对！'
-              : `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}`}
-        </div>
-        <div className={`row note-keys${chromatic ? ' chromatic' : ''}`}>
-          {boardKeys.map((k) => (
-            <NoteButton key={k.label} label={k.label} variant={k.black ? 'black' : 'natural'} onClick={() => onTap(k.pc)} />
-          ))}
-        </div>
-        <Piano onKey={onKey} />
-      </main>
-    );
-  }
-
-  // ---- 跟弹（play）：作答面 = 麦克风；隐藏音名板与仿真琴键 ----
   return (
-    <main className="screen practice play">
+    <main className="screen practice">
       <button type="button" className="rotate-hint" data-testid="rotate-hint" onClick={onRotateHint}>{hintMsg}</button>
       <div className="row space-between">
         <span>S{state.progress.stage} · {clefName}</span>
-        <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
+        <span className="hud">
+          <label className="mic-toggle" data-testid="mic-toggle">
+            <input type="checkbox" checked={playOn} onChange={onToggleChange} aria-label="跟弹：用麦克风听真琴作答" />
+            <span className="t-label">跟弹</span>
+            <span className="t-track" aria-hidden="true"><span className="t-thumb" /></span>
+          </label>
+          <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
+        </span>
       </div>
+      {micMsg && <div className="mic-msg" data-testid="mic-msg">{micMsg}</div>}
       {staff}
-      <div className="mic-hud" data-testid="mic-hud">
-        <div className="live" data-testid="live-name">
-          现在听到：<span className="now">{liveText}</span>
-        </div>
-        <div className="mic-level" style={{ width: '70%', margin: '4px auto 0' }}>
-          <div className="bar-fill" style={{ width: `${Math.round(mic.level * 100)}%` }} />
-        </div>
+      <div className={`fb ${fbOk ? 'ok' : fbBad ? 'bad' : 'none'}`} data-testid="feedback">
+        {fbOk ? '✓ 对！' : fbBad ? `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}` : IDLE_HINT}
       </div>
-      <div className={`fb ${fbClass}`} data-testid="feedback">{fb.text}</div>
-      {quietWarn && <div className="no-answer" data-testid="no-answer">没听到，请弹响该键</div>}
-      {stuck && (
+      {quietWarn && <div className="no-answer" data-testid="no-answer">还没作答：弹出或用音名点出这个音</div>}
+      {stuck && !flash && (
         <div className="escape-row" data-testid="escape-row">
-          <button type="button" className="link" data-testid="escape-hint" onClick={() => setShowHint((v) => !v)}>
-            {showHint ? '收起键位提示' : '键位提示'}
-          </button>
           <button type="button" className="link" data-testid="escape-skip" onClick={onSkip}>下一题</button>
         </div>
       )}
-      {showHint && stuck && (
-        <div className="keyhint">
-          <Piano onKey={() => { /* readonly */ }} readOnly highlight={sess.target.midi} />
-        </div>
-      )}
+      <div className={`row note-keys${chromatic ? ' chromatic' : ''}`}>
+        {boardKeys.map((k) => (
+          <NoteButton key={k.label} label={k.label} variant={k.black ? 'black' : 'natural'} onClick={() => onBoardPc(k.pc)} />
+        ))}
+      </div>
+      <Piano onKey={onPianoKey} />
     </main>
   );
 }

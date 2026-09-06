@@ -484,3 +484,41 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 - 门禁：vitest 全量（本机 `--maxWorkers=1`）＋ `npx tsc -b` ＋ `npm run build`。
 - 真机验收（README 里程碑 B 清单新增）：手机 https 进（`npm run tunnel`，§16）→ 选跟弹 → 授权 → 校准页试弹各八度（**重点 G2 低音**，确认不锁高一八度）→ 练一轮：看谱弹对即进下一题、首音弹错红闪提示偏差并可试到对键、找音过程不把准确率打崩、**踏板连音/快速重复音不误判**、嘈杂房间不误触发、轮末结算 + 记录 mode=play、数据页模式筛选正确。
 - README：里程碑 B 从「规划中」改「已实现」并同步措辞/验收清单。
+
+## §28 里程碑 B 定稿：跟弹开关（2026-09-07 老板定稿，已实现）
+
+> **老板定夺**：跟弹的界面与认音**不要有差别**——只在练习屏留一个「跟弹」开关，打开后监听麦克风、弹对即前进、**不显示实时听音读数**。且弹对要有**显式提示**，避免前后两音混淆。据此**否决 §27 的校准页 + 界面分版式 + 实时听音指示器**方案（校准页、mode 分段、自动结算语义均废弃，见 28.5）。
+> 实现后老板追加验收：判对绿✓ + 短暂停留再换题（≈0.35s），上一音余音不误判下一题。
+
+### 28.1 界面统一（无差别原则）
+- 认音与跟弹共用**同一练习屏**（谱面 + 反馈 + 音名板 + 仿真琴键，布局完全一致）。**移除 Setup「模式」分段**与 `lastMode` 读取，Setup 顶部改为"当前阶段 S{stage}"；选谱号直进 practice（移除 `calibrate` 视图）。`View` 回归 `'home'|'setup'|'practice'|'result'|'stats'|'settings'`。
+- 练习屏表头新增屏内「跟弹」开关（`.mic-toggle`，样式替换旧 `.mic-hud` 实时指示器）：**唯一入口**。关 = 认音计分逐字保持里程碑 A；开 → 当场请求麦克风授权并监听真琴。
+- 开启后**不显示实时听音读数**（音名/音量/偏差一律不出）；音名板与琴键仍在屏上，真琴与屏上点按共享同一套作答面（无差别）。
+- 引导语统一：认音/跟弹共用 `IDLE_HINT = '看谱，弹出或用音名点出这个音'`。
+
+### 28.2 判题语义：统一首击成败（`answerFirstShot`，取代 §27.2 `answerPlay`）
+- `core/session.ts` 导出 `type FirstShotAnswer = {kind:'onset',playedMidi}|{kind:'key',midi}|{kind:'pc',pc}` 与 `answerFirstShot(s, src): Session`：**任何作答源走同一条首击状态机**——首击判定沿用"状态机停在本题当且仅当 `s.last` 是对本题首击错的定格"；对则记 `correct`、`total+1`、推进；错则记 `wrong`、`total+1`、**题目停留**（可试错到对键，不再记账不再 `total+1`，弹对只置 `last` 一次 `correct` 供 ✓ 反馈并推进）。
+- 判定两档：`onset`/`key` 用音高 `matches(±30¢)`（`playedMidi` 浮点）；`pc`（音名板）用音级 `pc === target.midi % 12`。`actualPc = round(midi) % 12`（同 §27.2，v1 不落八度/音分）。
+- 屏上作答合成确认音沿用 §20.2：判对播目标音、判错播实际作答音（`pc` 补 `floor(target/12)*12+pc` 定位八度）。**真琴 onset 作答不合成**（真实琴已在响，避免叠音）。
+- 认音关态行为零改动：`onBoardPc`/`onPianoKey` 仍走 `answerTap`/`answerKey`（逐字判分、即点即进）。
+
+### 28.3 判对显式提示 + 消隐（前后两音不混淆，§28 核心）
+- 判对 → 反馈区绿 ✓（`✓ 对！`）并**停留 `CORRECT_HOLD_MS = 350ms`** 再换题：`holding` ref 在停留窗内**吞掉所有作答**（含真实琴的同键余音/重音头与屏上补按），`flash` state 让谱面保持显示旧音符 + 绿✓；窗满 `blank.current.shield()`（复用 `advanceBlank.ts` 时序消隐窗）再 `setSess` 推进。
+- 逃生（[下一题]，仅首击判错停留后出现）与判对推进换题后，**消隐窗 250ms 吞上一音余音/重音头**——与上一条共同保证前后相邻两音（含相邻同音）不混淆。
+- 逃生换题 `skipQuestion`：此题成绩已按首击定格，不新增记录。
+
+### 28.4 麦克风仲裁与数据（取代 §27.7 自动结算）
+- 开关 onToggleChange（用户手势内）：开即 `mic.request()` + `everPlay.current=true`；关即 `mic.stop()`。
+- **终态仲裁 effect**（订阅 `mic.status` + `playOn`）：`running`=在听（记 `wasRunning`）；`requesting`=授权弹窗等待；其余（denied/unsupported/error/idle=流中断）→ `setPlayOn(false)` + `mic.stop()` + `mic-msg` 提示。**流中断不再提前结算本轮**（认音不依赖麦克风，照常倒计时到点）——取代旧 §27.7「弹琴中途断流提前结算」。
+- 卸载/到点统一 `mic.stop()`（幂等）。本版**无跨屏流沿用**（移除校准页沿用语义），StrictMode 双挂载模拟卸载时未开麦、stop 无害（§27.3 模块级单例媒体流不再需要）。
+- 记录 `mode: everPlay.current ? 'play' : 'tap'`：**某轮开过跟弹即记 play**，否则 tap；StatsScreen「全部/认音/跟弹」筛选（§27.6）沿用不变。
+
+### 28.5 废弃清单（相对 §27）
+- 校准视图 `calibrate`、Setup 模式分段、`lastMode`、练习屏 play 专用版式、实时听音指示器 `.mic-hud`、断流提前结算、授权前必经校准——全部废弃。起音门（onset）、`matches`/`deviationLabel`（pitch）、`useMicPitch`（浏览器胶水）等纯音频模块**保留沿用**，仅消费方改为统一界面 + 开关。
+- §27.1 `Mode` 贯通改以开关 `everPlay` 语义实现；`SessionRecord.mode` 字段保留、由 `everPlay` 决定。
+
+### 28.6 测试与验收
+- 单测：`answerFirstShot` 全分支（onset/key 音高 ±30¢、pc 音级；首击对/错/试错到对/相邻同音新题判首击，§27.2 用例零改动转写）＋ `session.test.ts` 既有认音语义保留。
+- 组件（`playFlow.test.tsx`，mock `micSource`，hoisted 假件 `micRequest`→'requesting'、`mic._set('running'/'denied'/'idle')`、`_pushOnset(midi,cents)`）：Setup 无模式段/校准页；认音默认界面元素全在、无 mic-hud；开关授权/拒权回关提示/中断回关不提前结算/关闭即停麦；首击弹错出逃生+揭晓音名；逃生与判对后消隐窗吞旧音起音；判对绿✓ + 停留窗吞紧随同键起音；屏上点按统一首击；StrictMode 双挂载不误杀。push 均须 `act(async()=>…)` 包裹，结尾等 400ms 让停留定时器在 act 内落定。
+- 真机验收（README §28 清单）：选谱号直进练习无模式段/校准页；开跟弹授权后界面与认音无差别、不显示"现在听到/音量"；真琴弹对绿✓停留约 0.35s 换题、余音不误判；弹错 ✗ 停留可试对、[下一题] 可换题、低音 G2 重点试；跟弹开时屏上点按亦按首击；拒权/中断自动回关提示、本轮不提前结算；到点结算开过跟弹记 play；返回后麦克风指示灯熄灭；吵闹/踏板连音不疯跳。
+- 门禁：vitest 全量（`--maxWorkers=1`，OOM 时 `NODE_OPTIONS=--max-old-space-size=4096`）＋ `npx tsc -b` ＋ `npm run build`。

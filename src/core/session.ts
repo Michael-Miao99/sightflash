@@ -84,25 +84,40 @@ export function answerKey(s: Session, midi: number): Session {
   return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
 }
 
+/** 一次作答的来源与音高表达（§28 统一首击判分）：
+ *   onset = 真琴麦克风起音（浮点 MIDI，含音分偏差）；key = 屏上琴键（精确 MIDI）；
+ *   pc = 音名板按钮（仅音级 0..11，无八度）。 */
+export type FirstShotAnswer =
+  | { kind: 'onset'; playedMidi: number }
+  | { kind: 'key'; midi: number }
+  | { kind: 'pc'; pc: number };
+
 /**
- * 跟弹作答（pure，§27.2 首击成败）：playedMidi 为起音的实际浮点 MIDI（可含音分偏差）。
- * 只判每题第一个起音："本题是否已判"直接看状态机——停在本题当且仅当 last 是对本题首击错的定格
+ * 统一首击成败作答（pure，§27.2/§28）。三种作答面（真琴起音 / 屏上琴键 / 音名板音级）
+ * 走同一套首击状态机，是"跟弹开关开启"时的唯一判题入口。
+ *   ok 判定随作答面：onset/key 按精确音高 matches(±30¢，同音自动蕴含八度一致)；pc 按音级（无八度可表达）。
+ * 只判每题第一个作答："本题是否已判"直接看状态机——停在本题当且仅当 last 是对本题首击错的定格
  * （last.result==='wrong' && last.expectedMidi===target.midi）；推进/逃生后 last 只会是 null 或上一题的记录，
  * 故不依赖邻避也能把"相邻同音的新题"正确判为首击（终审回归：邻避只是概率性，见 generator 重抽上限）。
- * 首击 → 命中(matches ±30¢)记 correct 并推进；不中记 wrong 停留。
- * 已判过（首击错、停留中）→ 试错不再记 history / 不 total+1；终于弹对(matches)推进、不新增记录，
+ * 首击 → 命中记 correct 并推进；不中记 wrong 停留。
+ * 已判过（首击错、停留中）→ 试错不再记 history / 不 total+1；终于判对推进、不新增记录，
  * 仅 last 置一次 correct 供 ✓ 反馈。
- * 判定粒度 ±30¢≪半音 ⇒ 同音自动蕴含八度一致（无需单列八度比较）。
  */
-export function answerPlay(s: Session, playedMidi: number): Session {
+export function answerFirstShot(s: Session, src: FirstShotAnswer): Session {
   const target = s.target;
-  const ok = matches(playedMidi, target.midi);
-  const roundMidi = Math.round(playedMidi);
+  const ok =
+    src.kind === 'pc'
+      ? ((src.pc % 12) + 12) % 12 === target.midi % 12
+      : matches(src.kind === 'onset' ? src.playedMidi : src.midi, target.midi);
+  const actualPc =
+    src.kind === 'pc'
+      ? ((src.pc % 12) + 12) % 12
+      : (((Math.round(src.kind === 'onset' ? src.playedMidi : src.midi)) % 12) + 12) % 12;
   const item: HistoryItem = {
     result: ok ? 'correct' : 'wrong',
     expectedMidi: target.midi,
     expectedPc: target.midi % 12,
-    actualPc: ((roundMidi % 12) + 12) % 12,
+    actualPc,
   };
   // 该题首击是否已定：停在本题（last 是对本题首击错的定格）才算已判；其余（新题 / 推进后同音再现）都算首击
   const firstShot = !(s.last?.result === 'wrong' && s.last?.expectedMidi === target.midi);

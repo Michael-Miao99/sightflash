@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { act, cleanup, screen, render } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { AppRoot } from './App';
+import { LETTER_PC } from '../core/notation/note';
 
 // jsdom 无 getUserMedia/AudioContext → UI 测试 mock micSource（浏览器胶水走真机验收 §27.8）。
-// hoisted 假件：状态 + 订阅通知 + handler 注入，可脚本化"授权/来音/拒权"。
+// hoisted 假件：状态 + 订阅通知 + handler 注入，可脚本化"授权/来音/拒权/中断"。
 const mic = vi.hoisted(() => {
   let status: string = 'idle';
   const subs = new Set<() => void>();
@@ -18,7 +19,12 @@ const mic = vi.hoisted(() => {
     micGetStatus: () => status,
     micSubscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
     micSetHandlers: (h: typeof handler) => { handler = h; },
-    micRequest: vi.fn(async () => status),
+    // 真行为近似：非终态 → 先置 requesting（授权弹窗）再由测试 _set 到 running/denied/…
+    micRequest: vi.fn(async () => {
+      if (!['running', 'requesting'].includes(status)) status = 'requesting';
+      subs.forEach((l) => l());
+      return status;
+    }),
     micStop: vi.fn(() => { status = 'idle'; subs.forEach((l) => l()); }), // 模拟真 stop：置 idle + 通知订阅
   };
 });
@@ -30,65 +36,77 @@ vi.mock('../ui/micSource', () => ({
   micStop: mic.micStop,
 }));
 
-/** 从首页走到 setup 并选「跟弹」+ 高音谱（stage1 解锁）→ 应落在校准页 */
-async function goCalibrate() {
+/** 从首页走到练习屏（选谱号直进，§28：无模式分段/校准页） */
+async function goPractice(): Promise<UserEvent> {
   const u = userEvent.setup();
   render(<AppRoot repoKind="memory" />);
   await screen.findByText(/五线速读/);
   await u.click(screen.getByRole('button', { name: /开始训练/ }));
-  await screen.findByText(/选择模式/);
-  await u.click(screen.getByTestId('mode-play'));
+  await screen.findByText(/选择谱号/);
   await u.click(screen.getByRole('button', { name: /高音谱/ }));
-  await screen.findByText(/麦克风校准/);
+  await screen.findByTestId('staff');
   return u;
 }
 
-describe('校准页路由与授权（§27.4，mock micSource）', () => {
-  it('Setup 有模式分段：默认认音选中；切跟弹后路由到校准页', async () => {
+/** 进入练习并把"跟弹"开关打开（授权 running） */
+async function goPracticePlay(): Promise<UserEvent> {
+  const u = await goPractice();
+  const toggle = screen.getByTestId('mic-toggle');
+  await u.click(toggle);
+  await act(async () => { mic._set('running'); });
+  return u;
+}
+
+const toggleChecked = () =>
+  (screen.getByRole('checkbox', { name: /跟弹/ }) as HTMLInputElement).checked;
+
+/** 从 feedback 的"✗ 是 Xn"揭晓串里取目标音名（自然音：字母+八度，如 "E4"） */
+function revealName(): string {
+  const t = screen.getByTestId('feedback').textContent ?? '';
+  const m = t.match(/✗ 是 ([A-G])(\d+)/);
+  if (!m) throw new Error(`feedback 未揭晓音名: "${t}"`);
+  return `${m[1]}${m[2]}`;
+}
+
+/** 自然音名 → MIDI（同中音 C4=60 规约：midi = (octave+1)*12 + pc） */
+function naturalNameToMidi(name: string): number {
+  const m = name.match(/^([A-G])(\d+)$/);
+  if (!m) throw new Error(`无法解析音名: "${name}"`);
+  return (Number(m[2]) + 1) * 12 + LETTER_PC[m[1]];
+}
+
+describe('Setup 统一入口与认音默认界面（§28）', () => {
+  it('无模式分段/校准页：选谱号直进练习，练习屏保持认音元素、无实时听音读数', async () => {
     const u = userEvent.setup();
     render(<AppRoot repoKind="memory" />);
     await screen.findByText(/五线速读/);
     await u.click(screen.getByRole('button', { name: /开始训练/ }));
-    await screen.findByText(/选择模式/);
-    expect(screen.getByTestId('mode-tap')).toHaveTextContent('认音 ✓');
-    expect(screen.getByTestId('mode-play')).not.toHaveTextContent('✓');
-    await u.click(screen.getByTestId('mode-play'));
-    expect(screen.getByTestId('mode-play')).toHaveTextContent('跟弹 ✓');
+    await screen.findByText(/选择谱号/);
+    // 不再有"选择模式"分段与跟弹预选
+    expect(screen.queryByText(/选择模式/)).toBeNull();
+    expect(screen.queryByTestId('mode-play')).toBeNull();
     await u.click(screen.getByRole('button', { name: /高音谱/ }));
-    // play → 先过校准页（非直接进 practice）
-    expect(await screen.findByText(/麦克风校准/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /请求麦克风/ })).toBeInTheDocument();
+    await screen.findByTestId('staff');
+    // 认音作答面全在：音名板 7 键 + 仿真琴键 + 反馈
+    expect(document.querySelectorAll('.note-btn')).toHaveLength(7);
+    expect(document.querySelector('.practice > .piano')).not.toBeNull();
+    expect(screen.getByTestId('feedback')).toBeInTheDocument();
+    // 无实时听音读数（mic-hud / 现在听到 / 音量）——跟弹读数只在界面上不留
+    expect(screen.queryByTestId('mic-hud')).toBeNull();
+    expect(screen.queryByText(/现在听到/)).toBeNull();
+    // 屏内跟弹开关在位、默认关
+    expect(screen.getByTestId('mic-toggle')).toHaveTextContent('跟弹');
+    expect(toggleChecked()).toBe(false);
   });
 
-  it('认音模式下选谱号仍直进 practice（tap 路由不变）', async () => {
-    const u = userEvent.setup();
-    render(<AppRoot repoKind="memory" />);
-    await screen.findByText(/五线速读/);
-    await u.click(screen.getByRole('button', { name: /开始训练/ }));
-    await screen.findByText(/选择模式/);
-    await u.click(screen.getByRole('button', { name: /高音谱/ })); // 默认认音
-    expect(await screen.findByTestId('staff')).toBeInTheDocument();
-  });
-
-  it('授权后（running）显示实时听音与开始按钮；弹低音 G2 实时音名出现', async () => {
-    await goCalibrate();
-    expect(screen.getByRole('button', { name: /请求麦克风/ })).toBeInTheDocument(); // idle 只给请求钮
-    // 脚本化"授权通过"：mock 状态变 running → 订阅推送 UI 切到实时听音
-    mic._set('running');
-    expect(await screen.findByText(/现在听到：-/)).toBeInTheDocument(); // 未弹音：-
-    expect(screen.getByRole('button', { name: /开始 \d+s 练习/ })).toBeInTheDocument();
-    mic._pushLevel(0.6, 43); // 弹一个低音 G2
-    expect(await screen.findByText(/现在听到：G2 ✓/)).toBeInTheDocument();
-  });
-
-  it('拒权（denied）显示引导文案，可返回 setup 换认音', async () => {
-    await goCalibrate();
-    mic._set('denied');
-    expect(await screen.findByText(/麦克风不可用/)).toBeInTheDocument();
-    const u = userEvent.setup();
-    await u.click(screen.getByRole('button', { name: /返回/ }));
-    expect(await screen.findByText(/选择模式/)).toBeInTheDocument();
-    expect(screen.getByTestId('mode-play')).toHaveTextContent('跟弹 ✓'); // lastMode 已持久
+  it('跟弹界面与认音无差别：开启监听时音名板/琴键仍在、不显示实时听音', async () => {
+    await goPracticePlay();
+    // 开启后作答面板保持（无差别）；麦克风不显示"现在听到/音量"
+    expect(document.querySelectorAll('.note-btn').length).toBeGreaterThan(0);
+    expect(document.querySelector('.practice > .piano')).not.toBeNull();
+    expect(screen.queryByTestId('mic-hud')).toBeNull();
+    expect(screen.queryByText(/现在听到/)).toBeNull();
+    expect(toggleChecked()).toBe(true);
   });
 
   afterEach(() => {
@@ -99,63 +117,111 @@ describe('校准页路由与授权（§27.4，mock micSource）', () => {
   });
 });
 
-describe('练习屏 play 版式与逃生（§27.5，mock micSource）', () => {
-  it('校准页点「开始」进入 play 练习：作答面板(音名板/仿真琴键)隐藏、实时听音指示器在位', async () => {
-    const u = userEvent.setup();
-    render(<AppRoot repoKind="memory" />);
-    await screen.findByText(/五线速读/);
-    await u.click(screen.getByRole('button', { name: /开始训练/ }));
-    await screen.findByText(/选择模式/);
-    await u.click(screen.getByTestId('mode-play'));
-    await u.click(screen.getByRole('button', { name: /高音谱/ }));
-    await screen.findByText(/麦克风校准/);
-    mic._set('running'); // 授权通过
-    await screen.findByText(/现在听到：-/);
-    await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
-    expect(await screen.findByTestId('staff')).toBeInTheDocument();
-    // play 作答面 = 麦克风：无 .note-btn / 无可点 .piano（仿真琴键隐藏）
-    expect(document.querySelectorAll('.note-btn')).toHaveLength(0);
-    expect(document.querySelector('.practice > .piano')).toBeNull();
-    // 实时听音指示器在位（音量条 + 音名）
-    expect(screen.getByTestId('mic-hud')).toBeInTheDocument();
-    expect(screen.getByTestId('live-name')).toHaveTextContent('现在听到：-');
-    // 初始待听引导
-    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
-    // 新题未判 → 逃生行不出现（[键位提示]/[下一题] 平时不占屏）
-    expect(screen.queryByTestId('escape-row')).toBeNull();
+describe('跟弹开关：授权 / 拒权 / 中断（§28，mock micSource）', () => {
+  it('开启开关即请求授权；授权通过后保持开启', async () => {
+    const u = await goPractice();
+    await u.click(screen.getByTestId('mic-toggle'));
+    expect(mic.micRequest).toHaveBeenCalledTimes(1);
+    expect(toggleChecked()).toBe(true); // 请求中保持开
+    await act(async () => { mic._set('running'); });
+    expect(toggleChecked()).toBe(true);
   });
 
-  it('实时来音反映到指示器（模拟弹一个音）', async () => {
-    await goPlay(() => {});
-    mic._pushLevel(0.5, 60); // C4
-    expect(await screen.findByTestId('live-name')).toHaveTextContent('现在听到：C4');
+  it('拒权 → 自动回关并提示；认音作答不受打断', async () => {
+    const u = await goPractice();
+    await u.click(screen.getByTestId('mic-toggle'));
+    await act(async () => { mic._set('denied'); });
+    expect(toggleChecked()).toBe(false);
+    expect(screen.getByTestId('mic-msg')).toHaveTextContent(/被拒/);
+    // 点一个音名钮：认音照常判（对/错都会有反馈，不再是对着麦克风引导）
+    await u.click(document.querySelectorAll('.note-btn')[0]!);
+    expect(screen.getByTestId('feedback').textContent).toMatch(/✓|✗/);
+    expect(screen.queryByText('本轮完成')).toBeNull(); // 不提前结算
   });
 
-  it('逃生换题后紧跟的旧音起音被消隐窗丢弃，不误判新题（§27 补回归）', async () => {
-    await goPlay(() => {});
-    // 首击弹错（midi 21 远离 S1 高音池）→ 判错停留、出逃生行
-    await act(async () => { mic._pushOnset(21, 0); });
-    expect(await screen.findByTestId('escape-row')).toBeInTheDocument();
-    // 点 [下一题] 逃生换题 → 起消隐窗
-    await userEvent.setup().click(screen.getByTestId('escape-skip'));
-    // 紧跟的"旧音余音"起音：若未被吞会判错新题 → feedback 跳"你弹了…"且逃生行重现；
-    // 被吞则保持待听引导。包 act() 让 React flush 后再断言，避免读到旧 DOM 的假阳性。
-    await act(async () => { mic._pushOnset(21, 0); });
-    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
-    expect(screen.queryByTestId('escape-row')).toBeNull(); // 未误判 → 逃生行不重现
+  it('麦克风中断（running→idle）→ 自动回关提示，本轮不提前结算，仍可认音', async () => {
+    const u = await goPracticePlay();
+    // 运行中被中断（后台/权限撤）→ 关回跟弹，不 setLeft(0) 提前结算
+    await act(async () => { mic._set('idle'); });
+    expect(toggleChecked()).toBe(false);
+    expect(screen.getByTestId('mic-msg')).toHaveTextContent(/中断/);
+    expect(screen.queryByText('本轮完成')).toBeNull(); // 仍在倒计时练习
+    expect(screen.getByTestId('staff')).toBeInTheDocument();
+    await u.click(document.querySelectorAll('.note-btn')[0]!);
+    expect(screen.getByTestId('feedback').textContent).toMatch(/✓|✗/);
+  });
+
+  it('关闭开关即停麦（stop 被调用、开关复位）', async () => {
+    const u = await goPracticePlay();
+    expect(mic.micStop).not.toHaveBeenCalled();
+    await u.click(screen.getByTestId('mic-toggle')); // 关
+    expect(mic.micStop).toHaveBeenCalled();
+    expect(toggleChecked()).toBe(false);
+    expect(screen.queryByTestId('mic-msg')).toBeNull();
   });
 
   afterEach(() => {
+    cleanup();
     mic._set('idle');
     mic.micStop.mockClear();
     mic.micRequest.mockClear();
   });
 });
 
-describe('StrictMode 下校准沿用流不被误杀（§27.3 回归）', () => {
-  it('dev 双挂载后仍留在练习屏正常倒计时，不会直接跳到本轮完成', async () => {
-    // React dev StrictMode 首挂会模拟一次"卸载→重挂"。若练习屏卸载兜底调 mic.stop()，
-    // 会把校准沿用进来的 running 流杀掉 → 流中断分支 setLeft(0) → 直接结算（真机 dev 复现）。
+describe('统一首击判分与判对消隐（§28，可注入起音）', () => {
+  it('首击弹错（远音 21）→ 判错停留、出逃生行，反馈揭晓目标音名', async () => {
+    await goPracticePlay();
+    await act(async () => { mic._pushOnset(21, 0); });
+    expect(screen.getByTestId('feedback').textContent).toMatch(/✗ 是 [A-G]\d/);
+    expect(screen.getByTestId('escape-row')).toBeInTheDocument();
+  });
+
+  it('逃生 [下一题] 后紧跟的旧音起音被消隐窗吞，不误判新题（§27 补回归保留）', async () => {
+    await goPracticePlay();
+    await act(async () => { mic._pushOnset(21, 0); }); // 首击错 → 停留、逃生行出现
+    expect(screen.getByTestId('escape-row')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByTestId('escape-skip')); // 逃生换题 → 起消隐窗
+    // 紧跟"旧音余音"起音：被吞则保持待答引导、逃生行不重现（包 act 让 React flush，防读到旧 DOM）
+    await act(async () => { mic._pushOnset(21, 0); });
+    expect(screen.getByTestId('feedback').textContent).toMatch(/弹出或用音名点出/);
+    expect(screen.queryByTestId('escape-row')).toBeNull();
+  });
+
+  it('判对 → 绿✓；紧随其后的旧音同键起音被停留窗吞，不误判（§28 核心回归）', async () => {
+    await goPracticePlay();
+    await act(async () => { mic._pushOnset(21, 0); }); // 首击错 → 揭晓目标
+    const t1 = naturalNameToMidi(revealName());
+    // 弹对 + 立刻再补一次同键（旧音余音/重音头）：判对起停留窗，第二击被吞、不误判
+    await act(async () => { mic._pushOnset(t1, 0); mic._pushOnset(t1, 0); });
+    expect(screen.getByTestId('feedback').textContent).toContain('✓ 对！');
+    expect(screen.queryByTestId('escape-row')).toBeNull(); // 未被误判成错
+    // 等停留窗走完（推进换题），把定时 setSess 包在 act 内，避免漏清理告警
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+  });
+
+  it('屏上点按亦统一首击：首击点错 → 停留逃生；按揭晓音名点对 → ✓（试错不重计、推进）', async () => {
+    const u = await goPracticePlay();
+    await act(async () => { mic._pushOnset(21, 0); }); // 起音首击错 → 揭晓目标音名
+    const name = revealName();
+    expect(screen.getByTestId('escape-row')).toBeInTheDocument();
+    // 用音名板点对（试错到对）→ ✓；逃生行消失；仍留在练习（未误判、已推进）
+    await u.click(screen.getByRole('button', { name: name[0] }));
+    expect(screen.getByTestId('feedback').textContent).toContain('✓ 对！');
+    expect(screen.queryByTestId('escape-row')).toBeNull();
+    // 等停留窗走完（推进换题），把定时 setSess 包在 act 内
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+  });
+
+  afterEach(() => {
+    cleanup();
+    mic._set('idle');
+    mic.micStop.mockClear();
+    mic.micRequest.mockClear();
+  });
+});
+
+describe('StrictMode 开发态不误杀（§28）', () => {
+  it('双挂载后仍在练习屏正常倒计时，不直接跳本轮完成', async () => {
     const u = userEvent.setup();
     render(
       <StrictMode>
@@ -164,20 +230,15 @@ describe('StrictMode 下校准沿用流不被误杀（§27.3 回归）', () => {
     );
     await screen.findByText(/五线速读/);
     await u.click(screen.getByRole('button', { name: /开始训练/ }));
-    await screen.findByText(/选择模式/);
-    await u.click(screen.getByTestId('mode-play'));
+    await screen.findByText(/选择谱号/);
     await u.click(screen.getByRole('button', { name: /高音谱/ }));
-    await screen.findByText(/麦克风校准/);
-    mic._set('running'); // 授权通过（校准页已 running）
-    await screen.findByText(/现在听到：-/);
-    // 双挂载发生在"开始练习"后的重渲染期间；跑完效应微任务队列，确认没提前结算
-    await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
-    // 仍在练习屏：实时听音指示器在位、倒计时 ≥60、无"本轮完成"
-    expect(await screen.findByTestId('mic-hud')).toBeInTheDocument();
-    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
+    await screen.findByTestId('staff');
+    // 开跟弹并授权：仍留在练习屏（卸载清理停麦发生在双挂载时、彼时未开麦，幂等无害）
+    await u.click(screen.getByTestId('mic-toggle'));
+    await act(async () => { mic._set('running'); });
+    expect(toggleChecked()).toBe(true);
+    expect(screen.getByTestId('feedback')).toBeInTheDocument();
     expect(screen.queryByText('本轮完成')).toBeNull();
-    // 流未被误杀：mic.stop 不应被练习屏挂载路径调用（结算/离屏才 stop）
-    expect(mic.micStop).not.toHaveBeenCalled();
   });
 
   afterEach(() => {
@@ -187,21 +248,3 @@ describe('StrictMode 下校准沿用流不被误杀（§27.3 回归）', () => {
     mic.micRequest.mockClear();
   });
 });
-
-/** 进入 play 练习屏：home → 开始 → 跟弹 → 高音谱 → 授权 → 开始练习 */
-async function goPlay(onReady: () => void): Promise<UserEvent> {
-  const u = userEvent.setup();
-  render(<AppRoot repoKind="memory" />);
-  await screen.findByText(/五线速读/);
-  await u.click(screen.getByRole('button', { name: /开始训练/ }));
-  await screen.findByText(/选择模式/);
-  await u.click(screen.getByTestId('mode-play'));
-  await u.click(screen.getByRole('button', { name: /高音谱/ }));
-  await screen.findByText(/麦克风校准/);
-  mic._set('running');
-  await screen.findByText(/现在听到：-/);
-  await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
-  await screen.findByTestId('staff');
-  onReady();
-  return u;
-}
