@@ -7,6 +7,7 @@ import { spelledName, LETTER_PC } from '../core/notation/note';
 import { playPiano } from './piano.ts';
 import { requestLandscape } from './landscape';
 import { StaffView } from './StaffView';
+import { GrandStaffView } from './GrandStaffView';
 import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 
@@ -95,7 +96,7 @@ export function PracticeScreen() {
       : sess.last.result === 'correct'
         ? '✓ 对！'
         : `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}`; // 错题回显用题面拼写（答错时 target 停留）
-  const clefName = sess.target.clef === 'treble' ? '高音谱' : '低音谱';
+  const clefName = cfg.clef === 'mixed' ? '大谱表' : sess.target.clef === 'treble' ? '高音谱' : '低音谱';
   const chromatic = gamut === 'chromatic';
   const boardKeys = chromatic ? CHROMATIC_KEYS : NATURAL_KEYS;
 
@@ -106,7 +107,11 @@ export function PracticeScreen() {
         <span>S{state.progress.stage} · {clefName}</span>
         <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
       </div>
-      <StaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />
+      {cfg.clef === 'mixed' ? (
+        <GrandStaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />
+      ) : (
+        <StaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />
+      )}
       <div className={`fb ${fb}`} data-testid="feedback">
         {fbText}
       </div>

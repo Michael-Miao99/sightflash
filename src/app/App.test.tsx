@@ -79,6 +79,28 @@ describe('AppRoot', () => {
     expect(await screen.findByText(/五线速读/)).toBeInTheDocument();
   });
 
+  it('seed stage3+mixed：混合模式练习渲染大谱表且表头标“大谱表”', async () => {
+    render(<AppRoot repoKind="memory" seed={{ stage: 3, lastClef: 'mixed' }} />);
+    await screen.findByText(/五线速读/);
+    await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await userEvent.click(screen.getByRole('button', { name: /高\/低混合/ }));
+    expect(await screen.findByTestId('grand-staff')).toBeInTheDocument();
+    expect(screen.queryByTestId('staff')).toBeNull(); // 混合不再走单行谱
+    expect(screen.getByText(/大谱表/)).toBeInTheDocument(); // 表头
+  });
+
+  it('seed stage1+treble：单谱模式仍渲染单行 StaffView（分支不串扰）', async () => {
+    render(<AppRoot repoKind="memory" seed={{ stage: 1, lastClef: 'treble' }} />);
+    await screen.findByText(/五线速读/);
+    await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await userEvent.click(screen.getByRole('button', { name: /高音谱/ }));
+    expect(await screen.findByTestId('staff')).toBeInTheDocument();
+    expect(screen.queryByTestId('grand-staff')).toBeNull();
+    expect(screen.getByText(/高音谱/)).toBeInTheDocument();
+  });
+
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
