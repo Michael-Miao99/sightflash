@@ -1,6 +1,6 @@
 import { useApp } from '../app/state';
 import { defaultState } from '../core/storage/logic';
-import { THEMES } from './themes';
+import { normalizeTheme, THEMES } from './themes';
 
 export function SettingsScreen() {
   const { state, setState, repo, go } = useApp();
@@ -31,7 +31,7 @@ export function SettingsScreen() {
           {THEMES.map((t) => (
             <button key={t.id} className="sel small" data-testid={`theme-${t.id}`}
               onClick={() => setState((p) => ({ ...p, settings: { ...p.settings, theme: t.id } }))}>
-              {t.label}{state.settings.theme === t.id ? ' ✓' : ''}
+              {t.label}{normalizeTheme(state.settings.theme) === t.id ? ' ✓' : ''}
             </button>
           ))}
         </div>

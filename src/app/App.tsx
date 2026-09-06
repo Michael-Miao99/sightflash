@@ -35,13 +35,15 @@ function Shell() {
 }
 
 /** 主题同步：settings.theme（真源）→ <html data-theme> + localStorage 首帧镜像。
- *  mount 即设一次（含老档缺字段回落的 paper），后续仅 theme 变化时重设。 */
+ *  ready 后即设一次（含老档缺字段回落的 paper），后续仅 theme 变化时重设。
+ *  就绪前不写，避免 DB 载入期间把默认 paper 短暂刷到非默认主题用户身上（首帧底色由 main.tsx applyBootTheme 负责）。 */
 function ThemeSync() {
-  const { state } = useApp();
+  const { state, ready } = useApp();
   const theme = normalizeTheme(state.settings.theme);
   useEffect(() => {
+    if (!ready) return;
     document.documentElement.dataset.theme = theme;
     mirrorTheme(theme);
-  }, [theme]);
+  }, [theme, ready]);
   return null;
 }
