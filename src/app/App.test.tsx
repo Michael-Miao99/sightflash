@@ -122,6 +122,7 @@ describe('AppRoot', () => {
   afterEach(() => {
     cleanup();
     delete document.documentElement.dataset.theme; // 防 dataset 跨用例串扰
+    localStorage.clear(); // 顺带清 sf:theme 镜像残留（仅镜像，非真源）
     vi.unstubAllGlobals();
   });
 });

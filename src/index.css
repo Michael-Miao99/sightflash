@@ -86,7 +86,7 @@ h1 { font-size: 1.6rem; margin: 4px 0 12px; font-family: var(--font-display); }
 .boot { padding: 40px; text-align: center; color: var(--text-dim); }
 .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; margin: 8px 0; }
 .bar-fill { height: 100%; background: var(--accent); transition: width .3s; }
-.row { display: flex; gap: 8px; justify-content: center; align-items: center; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
 .row.space-between { justify-content: space-between; }
 button { font: inherit; }
 button.primary { background: var(--accent); color: var(--accent-contrast); border: 0; border-radius: 10px; padding: 12px 20px; font-size: 1.1rem; }
@@ -103,6 +103,7 @@ button.danger { color: var(--danger-text); border-color: var(--danger-bd); }
 .label { color: var(--text-dim); margin-bottom: 6px; }
 .small { color: var(--text-faint); font-size: .85rem; }
 .timer { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+/* 警示态复用 --bad（§26 令牌收敛：原 --warn 语义并入，四主题下同值） */
 .timer.warn { color: var(--bad); }
 .fb { min-height: 28px; text-align: center; font-size: 1.1rem; margin: 8px 0; }
 .fb.ok { color: var(--ok); }
