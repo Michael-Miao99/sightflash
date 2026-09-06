@@ -1,4 +1,4 @@
-import type { MixedClef } from './generator/stages';
+import type { MixedClef, Gamut } from './generator/stages';
 import { chooseQuestion } from './generator/generator';
 import type { Question } from './generator/generator';
 
@@ -20,6 +20,7 @@ export interface SessionConfig {
   durationSec: number;
   rng: () => number;
   wrong: Record<number, number>;
+  gamut?: Gamut;
 }
 
 export interface Session {
@@ -28,6 +29,7 @@ export interface Session {
   durationSec: number;
   rng: () => number;
   wrong: Record<number, number>;
+  gamut?: Gamut;
   target: Question;
   correct: number;
   total: number;
@@ -36,7 +38,7 @@ export interface Session {
 }
 
 export function createSession(c: SessionConfig): Session {
-  const target = chooseQuestion(c.rng, c.stage, c.clef, c.wrong, -1);
+  const target = chooseQuestion(c.rng, c.stage, c.clef, c.wrong, -1, c.gamut);
   return { ...c, target, correct: 0, total: 0, history: [], last: null };
 }
 
@@ -54,7 +56,7 @@ export function answerTap(s: Session, guessedPc: number): Session {
     actualPc: guessedPc % 12,
   };
   const history = [item, ...s.history];
-  const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi) : s.target;
+  const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi, s.gamut) : s.target;
   return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
 }
 
@@ -72,7 +74,7 @@ export function answerKey(s: Session, midi: number): Session {
     actualPc: midi % 12,
   };
   const history = [item, ...s.history];
-  const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi) : s.target;
+  const target = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, s.target.midi, s.gamut) : s.target;
   return { ...s, target, correct: s.correct + (ok ? 1 : 0), total: s.total + 1, history, last: item };
 }
 

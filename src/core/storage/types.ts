@@ -1,4 +1,4 @@
-import type { MixedClef } from '../generator/stages';
+import type { MixedClef, Gamut } from '../generator/stages';
 
 export type Mode = 'tap'; // 里程碑 B 加 'play'（跟弹）
 
@@ -12,6 +12,7 @@ export interface Settings {
   durationSec: number; // 30 | 60
   lastMode: Mode;
   lastClef: MixedClef;
+  gamut: Gamut; // 练黑键（变化音）全局开关
 }
 
 export interface Streak {

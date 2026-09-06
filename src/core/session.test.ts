@@ -92,3 +92,39 @@ describe('answerKey 精确八度作答', () => {
     expect(next.history[0].actualPc).toBe(1);
   });
 });
+
+describe('session 变化音 gamut 穿透', () => {
+  it('chromatic 会话可出黑键目标且带合法 acc', () => {
+    let s: Session | null = null;
+    for (let seed = 1; seed < 400 && !s; seed++) {
+      const c = createSession({ stage: 3, clef: 'treble', durationSec: 60, rng: mulberry32(seed), wrong: {}, gamut: 'chromatic' });
+      if ([1, 3, 6, 8, 10].includes(c.target.midi % 12)) s = c;
+    }
+    expect(s).not.toBeNull();
+    expect(['#', 'b']).toContain(s!.target.acc);
+  });
+
+  it('缺省 gamut 的老构造保持自然音行为、无 acc', () => {
+    const s = createSession({ stage: 3, clef: 'treble', durationSec: 60, rng: mulberry32(1), wrong: {} });
+    expect([0, 2, 4, 5, 7, 9, 11]).toContain(s.target.midi % 12);
+    expect(s.target.acc).toBeUndefined();
+  });
+
+  it('黑键题答错按音级停留、答对推进', () => {
+    let s: Session | null = null;
+    for (let seed = 1; seed < 400 && !s; seed++) {
+      const c = createSession({ stage: 3, clef: 'treble', durationSec: 60, rng: mulberry32(seed), wrong: {}, gamut: 'chromatic' });
+      if ([1, 3, 6, 8, 10].includes(c.target.midi % 12)) s = c;
+    }
+    expect(s).not.toBeNull();
+    const sess = s!;
+    const midi = sess.target.midi;
+    const wrong = answerTap(sess, (midi % 12 + 1) % 12); // 按音级错答
+    expect(wrong.last?.result).toBe('wrong');
+    expect(wrong.target.midi).toBe(midi); // 停留
+    const ok = answerTap(wrong, midi % 12);
+    expect(ok.last?.result).toBe('correct');
+    expect(ok.correct).toBe(wrong.correct + 1);
+    expect(ok.target).not.toBe(wrong.target); // 推进换新题对象
+  });
+});
