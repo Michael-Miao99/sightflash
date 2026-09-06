@@ -101,8 +101,27 @@ describe('AppRoot', () => {
     expect(screen.getByText(/高音谱/)).toBeInTheDocument();
   });
 
+  it('主题同步：默认挂载后 <html> data-theme=paper，且设置页可切到 ebony', async () => {
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    expect(document.documentElement.dataset.theme).toBe('paper');
+    await userEvent.click(screen.getByRole('button', { name: /设置/ }));
+    await screen.findByText(/清除本地数据/);
+    await userEvent.click(screen.getByRole('button', { name: /乌木暖夜/ }));
+    expect(document.documentElement.dataset.theme).toBe('ebony');
+    expect(localStorage.getItem('sf:theme')).toBe('ebony');
+  });
+
+  it('非法主题值回落 paper（老档防御：normalize 兜底）', async () => {
+    document.documentElement.dataset.theme = 'neon'; // 模拟脏值
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    expect(document.documentElement.dataset.theme).toBe('paper');
+  });
+
   afterEach(() => {
     cleanup();
+    delete document.documentElement.dataset.theme; // 防 dataset 跨用例串扰
     vi.unstubAllGlobals();
   });
 });

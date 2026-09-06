@@ -1,5 +1,6 @@
 import { useApp } from '../app/state';
 import { defaultState } from '../core/storage/logic';
+import { THEMES } from './themes';
 
 export function SettingsScreen() {
   const { state, setState, repo, go } = useApp();
@@ -23,6 +24,14 @@ export function SettingsScreen() {
           {[30, 60].map((d) => (
             <button key={d} className="sel small" onClick={() => setState((p) => ({ ...p, settings: { ...p.settings, durationSec: d } }))}>
               {d}s{state.settings.durationSec === d ? ' ✓' : ''}
+            </button>
+          ))}
+        </div>
+        <div className="row"><span>主题</span>
+          {THEMES.map((t) => (
+            <button key={t.id} className="sel small" data-testid={`theme-${t.id}`}
+              onClick={() => setState((p) => ({ ...p, settings: { ...p.settings, theme: t.id } }))}>
+              {t.label}{state.settings.theme === t.id ? ' ✓' : ''}
             </button>
           ))}
         </div>
