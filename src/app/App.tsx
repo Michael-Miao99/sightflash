@@ -8,6 +8,7 @@ import { PracticeScreen } from '../ui/PracticeScreen';
 import { ResultScreen } from '../ui/ResultScreen';
 import { StatsScreen } from '../ui/StatsScreen';
 import { SettingsScreen } from '../ui/SettingsScreen';
+import { CalibrateScreen } from '../ui/CalibrateScreen';
 
 export function AppRoot({ repoKind, seed }: { repoKind?: 'memory' | 'auto'; seed?: SeedState }) {
   return (
@@ -26,6 +27,7 @@ function Shell() {
   switch (view) {
     case 'practice': return <PracticeScreen />;
     case 'setup': return <SetupScreen />;
+    case 'calibrate': return <CalibrateScreen />;
     case 'result': return <ResultScreen />;
     case 'stats': return <StatsScreen />;
     case 'settings': return <SettingsScreen />;

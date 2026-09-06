@@ -180,3 +180,32 @@ button.danger { color: var(--danger-text); border-color: var(--danger-bd); }
     margin: 2px auto 0;
   }
 }
+
+/* ===== 跟弹模式（里程碑 B §27.4/27.5）：校准页 / 实时听音 / 逃生 / 只读琴键 ===== */
+.calibrate .label { text-align: center; }
+.cal-live { font-size: 1.6rem; font-weight: 700; text-align: center; margin: 10px 0 4px;
+  min-height: 2.4rem; font-family: var(--font-display); }
+.mic-error { color: var(--bad); }
+.mic-level { height: 10px; border-radius: 6px; overflow: hidden; background: var(--track);
+  margin: 6px 0 14px; }
+.mic-level .bar-fill { transition: width .1s; }
+/* 练习屏(play)实时听音指示器 */
+.mic-hud { display: flex; flex-direction: column; align-items: center; gap: 2px;
+  margin: 2px 0; flex: none; }
+.mic-hud .live { font-size: 1.15rem; min-height: 1.6rem; color: var(--text-dim); }
+.mic-hud .live .now { color: var(--ok); font-weight: 700; }
+.no-answer { text-align: center; color: var(--text-dim); font-size: .9rem; min-height: 1.2em; }
+/* 逃生行（play：首击判错停留后出现） */
+.escape-row { display: flex; justify-content: center; gap: 8px; align-items: center;
+  margin: 2px 0; min-height: 0; flex: none; }
+button.link { background: none; border: none; color: var(--accent); text-decoration: underline;
+  cursor: pointer; padding: 2px 6px; font-size: .9rem; }
+/* [键位提示] 展开的非交互琴键 */
+.keyhint { margin: 2px auto; width: 100%; max-width: 480px; flex: none; }
+.keyhint .piano { height: 120px; margin: 2px auto; }
+/* 只读 / 高亮琴键（Piano readOnly / highlight，T9 生效） */
+.piano.readonly .key { pointer-events: none; }
+.piano .key.hl { box-shadow: inset 0 0 0 3px var(--accent); }
+@media (orientation: landscape) {
+  .keyhint .piano { height: clamp(72px, 16dvh, 120px); }
+}

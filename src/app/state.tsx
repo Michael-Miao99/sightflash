@@ -5,7 +5,7 @@ import { MemoryRepo } from '../core/storage/memory';
 import { IdbRepo, initialState } from './indexeddb';
 import type { MixedClef } from '../core/generator/stages';
 
-export type View = 'home' | 'setup' | 'practice' | 'result' | 'stats' | 'settings';
+export type View = 'home' | 'setup' | 'calibrate' | 'practice' | 'result' | 'stats' | 'settings';
 
 /** 测试缝：以 AppRoot/AppProvider 的 seed 覆盖初始 progress.stage 与 settings.lastClef。
  *  缺省 = initialState()，与产品行为完全一致；自动路径仍以 IndexedDB 首次载入为准。 */
