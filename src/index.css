@@ -83,6 +83,11 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
 .screen { padding: 16px; }
 h1 { font-size: 1.6rem; margin: 4px 0 12px; font-family: var(--font-display); }
 .card { background: var(--bg-card); border-radius: 12px; padding: 16px; margin: 12px 0; border: 1px solid var(--card-bd); }
+/* 麦克风灵敏度滑杆（设置页，§28 后老板追加） */
+.mic-sens { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.mic-sens input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+.mic-sens .sens-tag { font-variant-numeric: tabular-nums; font-size: .85em; color: var(--text-dim); }
+.mic-sens .sens-scale { display: flex; justify-content: space-between; font-size: .75em; color: var(--text-dim); }
 .boot { padding: 40px; text-align: center; color: var(--text-dim); }
 .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; margin: 8px 0; }
 .bar-fill { height: 100%; background: var(--accent); transition: width .3s; }

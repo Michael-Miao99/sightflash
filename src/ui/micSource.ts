@@ -44,6 +44,11 @@ export function micSubscribe(fn: () => void): () => void {
   return () => { subs.delete(fn); };
 }
 
+/** 按老板「麦克风灵敏度」覆盖起音门能量阈（practice 进入/开跟弹前调用；运行中不影响既有判定之外的新帧） */
+export function micSetGateSens(rmsOn: number, rmsOff: number): void {
+  gate.setThresholds(rmsOn, rmsOff);
+}
+
 function setStatus(s: MicStatus): void {
   status = s;
   subs.forEach((fn) => fn());

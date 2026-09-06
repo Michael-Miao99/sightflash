@@ -1,6 +1,14 @@
 import { useApp } from '../app/state';
 import { defaultState } from '../core/storage/logic';
+import { DEFAULT_MIC_SENS, MIC_SENS_MAX, MIC_SENS_MIN } from '../core/audio/onset';
 import { normalizeTheme, THEMES } from './themes';
+
+/** 灵敏度三段语感标签（0..100） */
+function sensTag(s: number): string {
+  if (s <= 30) return '灵敏';
+  if (s >= 70) return '稳健';
+  return '适中';
+}
 
 export function SettingsScreen() {
   const { state, setState, repo, go } = useApp();
@@ -26,6 +34,21 @@ export function SettingsScreen() {
               {d}s{state.settings.durationSec === d ? ' ✓' : ''}
             </button>
           ))}
+        </div>
+        <div className="mic-sens">
+          <div className="row space-between">
+            <span>麦克风灵敏度（跟弹）</span>
+            <span className="sens-tag" data-testid="mic-sens-tag">
+              {sensTag(state.settings.micSens ?? DEFAULT_MIC_SENS)} · {state.settings.micSens ?? DEFAULT_MIC_SENS}
+            </span>
+          </div>
+          <input
+            type="range" min={MIC_SENS_MIN} max={MIC_SENS_MAX} step={1}
+            aria-label="麦克风灵敏度" data-testid="mic-sens"
+            value={state.settings.micSens ?? DEFAULT_MIC_SENS}
+            onChange={(e) => setState((p) => ({ ...p, settings: { ...p.settings, micSens: Number(e.target.value) } }))}
+          />
+          <div className="sens-scale"><span>灵敏</span><span>适中</span><span>稳健</span></div>
         </div>
         <div className="row"><span>主题</span>
           {THEMES.map((t) => (

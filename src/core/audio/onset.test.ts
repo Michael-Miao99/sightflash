@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { OnsetGate, RMS_ON, RMS_OFF, STABLE_FRAMES, LOCK_FRAMES } from './onset';
+import {
+  OnsetGate, RMS_ON, RMS_OFF, STABLE_FRAMES, LOCK_FRAMES,
+  sensToThresholds, DEFAULT_MIC_SENS, MIC_SENS_MIN, MIC_SENS_MAX,
+} from './onset';
 import { midiToHz } from './pitch';
 
 const hz = (midi: number) => midiToHz(midi); // 直接由 pitch 反算，保证事件 midi 断言干净
@@ -74,5 +77,27 @@ describe('OnsetGate 起音门（§27.3）', () => {
     expect(STABLE_FRAMES).toBeGreaterThanOrEqual(2);
     expect(LOCK_FRAMES).toBeGreaterThanOrEqual(2);
     expect(RMS_OFF).toBeLessThan(RMS_ON);
+  });
+
+  it('sensToThresholds：边界夹紧、默认中庸偏稳、灵敏度越低阈值越高', () => {
+    expect(sensToThresholds(MIC_SENS_MIN).rmsOn).toBeCloseTo(0.012, 4);
+    expect(sensToThresholds(MIC_SENS_MAX).rmsOn).toBeCloseTo(0.048, 4);
+    const def = sensToThresholds(DEFAULT_MIC_SENS);
+    expect(def.rmsOn).toBeGreaterThan(0.02); // 老板嫌 0.02 太灵：默认回偏钝
+    expect(def.rmsOff).toBeLessThan(def.rmsOn);
+    const moreSensitive = sensToThresholds(10);
+    const lessSensitive = sensToThresholds(90);
+    expect(lessSensitive.rmsOn).toBeGreaterThan(moreSensitive.rmsOn);
+    expect(lessSensitive.rmsOff).toBeGreaterThan(moreSensitive.rmsOff);
+  });
+
+  it('setThresholds：按覆盖后的能量阈判定（老板灵敏度，不影响既有运行态）', () => {
+    const g = new OnsetGate();
+    g.setThresholds(0.2, 0.05);
+    const got = run(g, [
+      [0.1, hz(69)], [0.1, hz(69)], // 0.1 < 0.2：弱于覆盖阈 → 不触发
+      [0.4, hz(69)], [0.4, hz(69)], // 过 0.2 → 触发
+    ]);
+    expect(got).toEqual([false, false, false, true]);
   });
 });

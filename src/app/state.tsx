@@ -14,6 +14,8 @@ export interface SeedState {
   lastClef?: MixedClef;
   /** 跟弹开关沿用偏好（settings.followPlay，§28 后老板追加）测试覆盖用 */
   followPlay?: boolean;
+  /** 麦克风灵敏度（settings.micSens，老板可调）测试覆盖用 */
+  micSens?: number;
 }
 
 export function seededState(seed?: SeedState): AppState {
@@ -26,6 +28,7 @@ export function seededState(seed?: SeedState): AppState {
       ...def.settings,
       lastClef: seed.lastClef ?? def.settings.lastClef,
       followPlay: seed.followPlay ?? def.settings.followPlay,
+      micSens: seed.micSens ?? def.settings.micSens,
     },
   };
 }

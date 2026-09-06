@@ -12,8 +12,9 @@ import { GrandStaffView } from './GrandStaffView';
 import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 import { useMicPitch } from './useMicPitch';
+import { micSetGateSens } from './micSource';
 import { AdvanceBlank } from './advanceBlank';
-import type { OnsetEvent } from '../core/audio/onset';
+import { sensToThresholds, DEFAULT_MIC_SENS, type OnsetEvent } from '../core/audio/onset';
 
 const ROTATE_HINT_BASE = '横屏使用键位更宽 ↻';
 const ROTATE_HINT_MANUAL = '请手动旋转手机 ↻';
@@ -76,6 +77,12 @@ export function PracticeScreen() {
 
   const sound = state.settings.sound;
 
+  // 按老板「麦克风灵敏度」换算并覆盖起音门能量阈（settings.micSens，0..100；老档兜底默认）
+  function applyMicSens() {
+    const t = sensToThresholds(state.settings.micSens ?? DEFAULT_MIC_SENS);
+    micSetGateSens(t.rmsOn, t.rmsOff);
+  }
+
   // 麦克风 handlers。真琴起音 → 统一首击判定（playOn 双保险：未开 / 关掉后模块不会来事件）
   function handleOnset(e: OnsetEvent) {
     if (!playOn || finished.current || holding.current) return;
@@ -109,6 +116,7 @@ export function PracticeScreen() {
     if (!on) { mic.stop(); setMicMsg(''); return; }
     everPlay.current = true; // 开过即按 play 记录（§28 数据页）
     setMicMsg('');
+    applyMicSens(); // 灵敏度阈值 → 起音门（老板可调）
     mic.request().catch(() => {}); // micSource 已吞错，兜底
   }
 
@@ -119,6 +127,7 @@ export function PracticeScreen() {
     if (finished.current) return;
     if (!(state.settings.followPlay ?? false)) return;
     everPlay.current = true;
+    applyMicSens(); // 灵敏度阈值 → 起音门（老板可调）
     mic.request().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { AppRoot } from './App';
 import { LETTER_PC } from '../core/notation/note';
+import { sensToThresholds } from '../core/audio/onset';
 
 // jsdom 无 getUserMedia/AudioContext → UI 测试 mock micSource（浏览器胶水走真机验收 §27.8）。
 // hoisted 假件：状态 + 订阅通知 + handler 注入，可脚本化"授权/来音/拒权/中断"。
@@ -26,6 +27,7 @@ const mic = vi.hoisted(() => {
       return status;
     }),
     micStop: vi.fn(() => { status = 'idle'; subs.forEach((l) => l()); }), // 模拟真 stop：置 idle + 通知订阅
+    micSetGateSens: vi.fn(), // 灵敏度换算 → 起音门（老板可调），接线断言用
   };
 });
 vi.mock('../ui/micSource', () => ({
@@ -34,7 +36,12 @@ vi.mock('../ui/micSource', () => ({
   micSetHandlers: mic.micSetHandlers,
   micRequest: mic.micRequest,
   micStop: mic.micStop,
+  micSetGateSens: mic.micSetGateSens,
 }));
+// 顶层清 spy：各 describe 局部 afterEach 之外，防调用计数跨用例泄漏
+afterEach(() => {
+  mic.micSetGateSens.mockClear();
+});
 
 /** 从首页走到练习屏（选谱号直进，§28：无模式分段/校准页） */
 async function goPractice(): Promise<UserEvent> {
@@ -264,6 +271,35 @@ describe('跟弹开关默认沿用上次状态（settings.followPlay，§28 老�
     mic._set('idle');
     mic.micStop.mockClear();
     mic.micRequest.mockClear();
+  });
+});
+
+describe('麦克风灵敏度换算 → 起音门（老板可调，§28 追加）', () => {
+  /** 以 seed 直进练习屏 */
+  async function enterPractice(seed: { followPlay?: boolean; micSens?: number }): Promise<UserEvent> {
+    const u = userEvent.setup();
+    render(<AppRoot repoKind="memory" seed={seed} />);
+    await screen.findByText(/五线速读/);
+    await u.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await u.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByTestId('staff');
+    return u;
+  }
+
+  it('开机默认开（seed followPlay）：按 seed 灵敏度换算覆盖起音门再请求授权', async () => {
+    await enterPractice({ followPlay: true, micSens: 20 });
+    const t = sensToThresholds(20);
+    expect(mic.micSetGateSens).toHaveBeenCalledWith(t.rmsOn, t.rmsOff);
+    expect(mic.micRequest).toHaveBeenCalled();
+  });
+
+  it('默认关：toggle 打开时按当前（seed）灵敏度换算', async () => {
+    const u = await enterPractice({ micSens: 80 });
+    expect(mic.micSetGateSens).not.toHaveBeenCalled(); // 未开跟弹不设
+    await u.click(screen.getByTestId('mic-toggle'));
+    const t = sensToThresholds(80);
+    expect(mic.micSetGateSens).toHaveBeenCalledWith(t.rmsOn, t.rmsOff);
   });
 });
 

@@ -1,12 +1,13 @@
 import { DEFAULT_THEME } from './types';
 import type { AppState, Progress, Streak, Daily } from './types';
+import { DEFAULT_MIC_SENS } from '../audio/onset';
 
 export const DAILY_GOAL = 100;
 
 export function defaultState(): AppState {
   return {
     progress: { stage: 1, wrong: {} },
-    settings: { sound: true, durationSec: 60, lastMode: 'tap', lastClef: 'treble', gamut: 'natural', theme: DEFAULT_THEME, followPlay: false },
+    settings: { sound: true, durationSec: 60, lastMode: 'tap', lastClef: 'treble', gamut: 'natural', theme: DEFAULT_THEME, followPlay: false, micSens: DEFAULT_MIC_SENS },
     streak: { current: 0, lastDate: '' },
     daily: { date: '', correct: 0 },
   };

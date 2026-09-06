@@ -11,12 +11,27 @@ export interface OnsetEvent {
   cents: number;
 }
 
-export const RMS_ON = 0.02;          // 有音能量阈（进入候选）——真机偏弱弹奏触发不灵，调低（老板，2026-09-07）
+// 能量阈默认锚（离线/单测）。产品路径由老板「麦克风灵敏度」换算后经 micSetGateSens 覆盖：
+// 见 sensToThresholds / Settings.micSens（§28 后追加）。
+export const RMS_ON = 0.02;          // 有音能量阈（进入候选）
 export const RMS_OFF = 0.006;        // 静音阈（松键复位，低于它允许重触发）
 export const STABLE_FRAMES = 2;      // 音高稳定所需连续帧（≈86ms@48ms/帧）
 export const CENTS_LOCK = 25;        // 稳定判定内音高漂移上限(¢)
 export const PITCH_CHANGE_SEMI = 1.5; // 换音判别的半音跨度（同键持续不重触发）
 export const LOCK_FRAMES = 2;        // 触发后闭锁帧数（消抖，≈86ms）
+
+// ---- 麦克风灵敏度（老板可调，0..100）：0=最灵敏（弱音易判、噪声易误触）、100=最钝（需弹响些）----
+export const MIC_SENS_MIN = 0;
+export const MIC_SENS_MAX = 100;
+export const DEFAULT_MIC_SENS = 60; // ≈ RMS_ON 0.028（中庸偏稳；嫌误触往大调、嫌不灵往小调）
+
+/** 灵敏度 → 能量阈（对数插值：低段精细）。rmsOff 按 0.3 倍跟动并夹紧，保证 off 恒 < on。 */
+export function sensToThresholds(sens: number): { rmsOn: number; rmsOff: number } {
+  const s = Math.max(MIC_SENS_MIN, Math.min(MIC_SENS_MAX, sens));
+  const rmsOn = +(0.012 * Math.pow(4, s / 100)).toFixed(4); // 0.012(灵) … 0.048(钝)
+  const rmsOff = Math.min(0.016, Math.max(0.004, +(rmsOn * 0.3).toFixed(4)));
+  return { rmsOn, rmsOff };
+}
 
 type Stage = 'idle' | 'candidate' | 'locked';
 
@@ -26,6 +41,14 @@ export class OnsetGate {
   private pending: number[] = [];        // 候选帧的浮点 MIDI（稳定度参考）
   private lockLeft = 0;
   private soundingMidi: number | null = null; // 最近有效音的浮点 MIDI（换音/同键参考）
+  private rmsOn = RMS_ON;                // 有音能量阈（可经 setThresholds 按灵敏度覆盖）
+  private rmsOff = RMS_OFF;              // 静音阈
+
+  /** 覆盖能量阈（老板灵敏度换算而来）；不清运行态，仅影响后续判定 */
+  setThresholds(rmsOn: number, rmsOff: number): void {
+    this.rmsOn = rmsOn;
+    this.rmsOff = rmsOff;
+  }
 
   reset(): void {
     this.stage = 'idle';
@@ -38,15 +61,15 @@ export class OnsetGate {
   /** 喂一帧 (rms, pitchHz)；产出一次起音事件则返回它，否则 null。 */
   feed(rms: number, pitchHz: number | null): OnsetEvent | null {
     // 静音/能量过低 → 松键复位（清 soundingMidi，允许同音再触发）
-    if (rms < RMS_OFF) {
+    if (rms < this.rmsOff) {
       this.candidateRuns = 0;
       this.pending = [];
       this.stage = 'idle';
       this.soundingMidi = null;
       return null;
     }
-    // 弱能量（RMS_OFF..RMS_ON）或无稳定音高（噪声/说话/瞬态）→ 候选不成立，不算松键
-    if (rms < RMS_ON || pitchHz === null || !Number.isFinite(pitchHz)) {
+    // 弱能量（off..on）或无稳定音高（噪声/说话/瞬态）→ 候选不成立，不算松键
+    if (rms < this.rmsOn || pitchHz === null || !Number.isFinite(pitchHz)) {
       this.candidateRuns = 0;
       this.pending = [];
       return null;
