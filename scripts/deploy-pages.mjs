@@ -24,8 +24,12 @@ function run(cmd, args, opts = {}) {
     process.exit(r.status ?? 1);
   }
 }
-function git(args, opts = {}) {
-  return spawnSync('git', ['-C', repo, ...args], { stdio: 'inherit', ...opts });
+function git(args) {
+  const r = spawnSync('git', ['-C', repo, ...args], { stdio: 'inherit' });
+  if (r.status !== 0) {
+    console.error(`\n[deploy] git 失败: git ${args.join(' ')}`);
+    process.exit(r.status ?? 1);
+  }
 }
 const gitOk = (args) => spawnSync('git', ['-C', repo, ...args], { stdio: 'ignore' }).status === 0;
 
