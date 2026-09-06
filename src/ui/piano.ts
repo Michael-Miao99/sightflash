@@ -1,11 +1,13 @@
+import { midiToHz } from '../core/audio/pitch';
+
 // WebAudio 加法合成钢琴音。无素材依赖；jsdom / 无 WebAudio / 设置关闭时静默。
 interface WebAudioGlobal {
   AudioContext?: typeof AudioContext;
   webkitAudioContext?: typeof AudioContext;
 }
 
-/** MIDI 号 → 频率(Hz)。A4(69)=440 */
-export const midiHz = (m: number): number => 440 * 2 ** ((m - 69) / 12);
+/** MIDI 号 → 频率(Hz)。A4(69)=440 —— 收敛自 core/audio/pitch（§27.3，消双源） */
+export const midiHz = midiToHz;
 
 let ac: AudioContext | null = null;
 const bufferCache = new Map<string, AudioBuffer>();
