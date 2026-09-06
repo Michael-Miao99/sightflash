@@ -353,3 +353,60 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 - `PracticeScreen` 集成：混合模式渲染 `GrandStaffView`、单谱模式仍渲染 `StaffView`（组件实例判定，不改 §24 既有 UI 用例）。
 - 回归：vitest 全量（本机 `--maxWorkers=1`）＋`npx tsc -b`＋`npm run build`。
 - README：里程碑 A 措辞补「混合模式显示真钢琴大谱表（双行 + 大括号 + 高低谱号，单音画在所属行）」；真机验收新增一项：360 横屏无滚动、键盘完整、大谱表/单谱两种观感正确、单音落在所属行可读。
+
+## §26 主题系统（A3：四套可切换皮肤，谱面随主题反墨）
+
+> **背景（老板 2026-09-06 试用反馈）**：现有界面观感差（"有点难看"）。根因：默认「深色 SaaS 俗套」——slate 深底 + 单一天蓝强调 + 同构圆角灰卡 + emoji 图标撑版面 + 系统默认字体，且与题材（乐谱 / 钢琴）完全脱节。**决定不做单一皮肤，改为主题系统：四套气质全部实现、设置内可切换、全局生效（含练习屏谱面随主题反墨色）**。老板已用 Visual Companion 过目方向与浅色练习屏样张（A 暖纸乐稿默认、C 极简墨白、B 乌木暖夜对照）并认可。
+
+### 26.1 范围
+- 新增主题概念 + 持久化字段；实现 **四套**：`paper` 暖纸乐稿（默认）/ `ebony` 乌木暖夜 / `ink` 极简墨白 / `classic` 经典深色（≈现状打磨后的深色保底）。
+- 全屏颜色 + 谱面 SVG + 钢琴收敛为 **CSS 变量令牌**；**几何 / 布局 / 横屏高度预算（§22.1、§25.3）一律不动**。
+- 设置页加「主题」选择行；首帧防闪。
+- 不做（本轮明确外）：用户自调色板/自定主题、跟随系统深浅、按主题差异化的练习屏版式预算、主题间动画过渡、多语言。
+
+### 26.2 令牌架构
+- 主题挂根容器 `<html data-theme="…">`。`:root` 放 **paper** 默认令牌（保证 JS 设属性前首帧已是默认色）；`html[data-theme="ebony"]` / `"ink"` / `"classic"` 三块覆盖。
+- 谱面令牌（替代 StaffView / GrandStaffView 硬编码色，§测试已确认无 fill/stroke 色值断言）：
+  - `--staff-line`（五线，深色主题保持 #64748b 现状）、`--staff-soft`（谱号/加线/括号，现状 #cbd5e1）、`--staff-note`（符头/符干/记号，现状 #f8fafc）。
+  - **classic 主题逐值 = 现状**，令牌化后观感零变化。
+- 通用令牌（index.css 现有硬编码色字面量收敛于此）：`--bg` `--bg-card` `--text` `--text-dim` `--text-faint` `--line` `--btn-primary-bg/-text` `--sel-bg/-bd` `--accent`（进度/图表/高亮）`--ok` `--bad` `--warn` `--danger`；展示字体 `--font-display`（paper/ink 用衬线栈，ebony/classic 用系统 sans），仅标题/大数字使用。
+- 练习专用：钢琴白键 `--key-white1/2`、黑键 `--key-black`、琴壳/底 `--key-case`、C4 标注 `--c4-label`、音名板黑键双名 `--black-name`。
+
+### 26.3 四套关键色（速查，实现以此为准微调）
+| token | paper 暖纸乐稿（默认） | ebony 乌木暖夜 | ink 极简墨白 | classic 经典深色 |
+|---|---|---|---|---|
+| --bg | #f6f0e2 谱纸 | #1a150f 暖夜 | #fcfcfb | #0f172a |
+| --bg-card | #fdf9ee | #241c13 | #ffffff | #1e293b |
+| --text | #2a2218 墨 | #f4eada 象牙 | #131313 | #e2e8f0 |
+| --accent | #b8432f 朱砂 | #c9a35f 黄铜 | #111（纯墨，仅进度） | #38bdf8 |
+| --staff-note | #241d13 近黑墨 | #f6eddc 亮 | #000 | #f8fafc |
+| --key-case | #e9dfc8 暖木壳 | #100c07 | #eceae4 | #0b1220 |
+
+琴键本身（象牙白/乌木黑渐变）四套一致——琴就是琴，只换琴壳/底与周边。
+
+### 26.4 行为与持久化
+- `Settings` 加必填 `theme: ThemeId`（'paper'|'ebony'|'ink'|'classic'）。唯一 settings 构造点 `defaultState()`（logic.ts，新装/清除重置/内存兜底共用）加 `theme:'paper'`。
+- **老存档无 theme 字段**：类型必填但运行防御——读取一律经 `settings.theme ?? DEFAULT_THEME('paper')`，启动不崩。
+- 设置页「主题」行：四枚小按钮（暖纸乐稿/乌木暖夜/极简墨白/经典深色），当前项高亮；点即 `setState` → 既有全量 `saveState` 自动持久化。
+- **生效与首帧防闪**：`main.tsx` render 前同步读 localStorage 镜像键（如 `sf:theme`，合法值否则 paper）设 `document.documentElement.dataset.theme`（JS 先于首帧 → 无闪窗）；`AppRoot` effect 把 `settings.theme` 同步到 `dataset` 并写回镜像。localStorage 仅作首帧镜像，**真源 = settings（IndexedDB）**。
+- 切换即时生效，不加过渡动画（留待后续）。
+
+### 26.5 组件改动清单
+- `core/storage/types.ts`：ThemeId 类型 + Settings.theme；`core/storage/logic.ts`：defaultState 加 theme。
+- `src/index.css`：硬编码色收敛为令牌 + `:root`(paper) 与三主题覆盖块 + 展示字体接入标题（h1/大字）。
+- `StaffView.tsx` / `GrandStaffView.tsx`：SVG 内 fill/stroke 字面量 → `var(--staff-*)`。
+- `SettingsScreen.tsx`：主题行（4 键）。
+- `src/main.tsx`：首帧 dataset；`app/App.tsx`：主题同步 effect（含镜像写回）。
+- 空态/统计散点/错音条/计时 warn/反馈 ok-bad 等既有色一律入令牌（每套定义 ok/bad/warn/chart 色）。
+- 布局 / 几何 / 预算规则**不改**；PracticeScreen 无逻辑改动（谱面颜色经变量自动适配）。
+
+### 26.6 测试与验收
+- 单测（jsdom，内存 repo）：
+  - `defaultState().settings.theme === 'paper'`；清除重置后仍 paper。
+  - 设置页选「乌木暖夜/极简墨白/…」→ `document.documentElement.dataset.theme` 变对应值；持久化走既有 saveState（不新增断言路径）。
+  - 老档（settings 缺 theme）载入不崩、回落 paper；缺省 `?? paper` 路径覆盖。
+  - AppRoot 挂载后 dataset.theme 为合法主题之一（不为空）。
+  - 既有谱面/其余用例零改动全绿（已确认无颜色断言）。
+- 门禁：vitest 全量（`--maxWorkers=1`）＋`npx tsc -b`＋`npm run build`。
+- 真机验收：四主题逐套过 **首页 / 设置 / 练习（横竖屏）/ 数据 / 结算**；浅色两套重点看谱墨可读性与琴键/纸白协调；classic 与改前观感逐屏一致。
+- README：设置可切四主题 + 默认说明。
