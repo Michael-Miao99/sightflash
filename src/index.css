@@ -17,6 +17,10 @@ button.sel:disabled { opacity: .4; }
 button.sel.small { padding: 6px 12px; }
 button.danger { color: #fca5a5; border-color: #7f1d1d; }
 .note-btn { flex: 1; min-width: 0; aspect-ratio: 1; font-size: 1.35rem; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; }
+/* 12 键音名板（练黑键=chromatic）：黑键键琥珀配色；竖屏极窄可换行 */
+.note-keys.chromatic { flex-wrap: wrap; row-gap: 6px; }
+.note-keys.chromatic .note-btn { flex: 1 1 36px; min-width: 0; max-width: 46px; font-size: 0.72rem; padding: 0 2px; }
+.note-btn.black-name { color: #fbbf24; border-color: #8a5a00; }
 .label { color: #94a3b8; margin-bottom: 6px; }
 .small { color: #64748b; font-size: .85rem; }
 .timer { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
@@ -76,6 +80,7 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
   .practice .staff-wrap { max-width: 180px; margin: 0 auto; flex: none; }
   .practice .fb { min-height: 18px; margin: 0; font-size: 1rem; flex: none; }
   .practice .note-btn { max-width: 64px; aspect-ratio: auto; height: 32px; font-size: 1.1rem; border-radius: 8px; }
+  .practice .note-keys.chromatic .note-btn { font-size: 0.95rem; max-width: 64px; }
   .practice .piano {
     flex: 1 1 0;
     min-height: 108px;

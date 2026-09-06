@@ -3,20 +3,38 @@ import { useApp } from '../app/state';
 import { createSession, answerTap, answerKey } from '../core/session';
 import { finalizeSession } from '../core/finalize';
 import { mulberry32 } from '../core/generator/generator';
-import { midiToName, LETTER_PC } from '../core/notation/note';
+import { spelledName, LETTER_PC } from '../core/notation/note';
 import { playPiano } from './piano.ts';
 import { requestLandscape } from './landscape';
 import { StaffView } from './StaffView';
 import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 
-const PITCH_BUTTONS = Object.keys(LETTER_PC); // C→B 插入序（与 letter 按钮一致）
 const ROTATE_HINT_BASE = '横屏使用键位更宽 ↻';
 const ROTATE_HINT_MANUAL = '请手动旋转手机 ↻';
 
+/** 音名板键定义：label 按钮文字；pc 判对音级；black 黑键键（双名、配色区分） */
+interface BoardKey { label: string; pc: number; black: boolean; }
+
+/** 自然 7 键：C…B（LETTER_PC 插入序，与既有按钮一致） */
+const NATURAL_KEYS: BoardKey[] = Object.entries(LETTER_PC).map(([label, pc]) => ({ label, pc, black: false }));
+
+/** 黑键 5 键双名：pc ∈{1,3,6,8,10}，等音同键同 pc */
+const BLACK_KEY_LABELS: ReadonlyArray<[number, string]> = [
+  [1, 'C#/Db'], [3, 'D#/Eb'], [6, 'F#/Gb'], [8, 'G#/Ab'], [10, 'A#/Bb'],
+];
+
+/** chromatic 12 键：按音级 0→11 排（C C# D D# E F F# G G# A A# B） */
+const CHROMATIC_KEYS: BoardKey[] = (() => {
+  const byPc = new Map<number, BoardKey>(NATURAL_KEYS.map((k) => [k.pc, k]));
+  for (const [pc, label] of BLACK_KEY_LABELS) byPc.set(pc, { label, pc, black: true });
+  return Array.from({ length: 12 }, (_, pc) => byPc.get(pc)!);
+})();
+
 export function PracticeScreen() {
   const { state, setState, repo, go } = useApp();
-  const cfg = { stage: state.progress.stage, clef: state.settings.lastClef, durationSec: state.settings.durationSec };
+  const gamut = state.settings.gamut ?? 'natural'; // 老存档缺字段按 natural
+  const cfg = { stage: state.progress.stage, clef: state.settings.lastClef, durationSec: state.settings.durationSec, gamut };
   const seed = useRef(Math.floor(Math.random() * 2 ** 31));
   const [sess, setSess] = useState(() =>
     createSession({ ...cfg, rng: mulberry32(seed.current), wrong: state.progress.wrong }),
@@ -51,10 +69,8 @@ export function PracticeScreen() {
 
   const sound = state.settings.sound;
 
-  // 音名按钮作答：判对播目标音；判错播“所选音名 @ 谱面音符八度”的错音。
-  function onTap(label: string) {
-    const pc = LETTER_PC[label];
-    if (pc === undefined) return; // 防御：异常 label 直接忽略
+  // 音名板作答（按音级）：判对播目标音；判错播“所选音级 @ 谱面音符八度”的错音。
+  function onTap(pc: number) {
     const target = sess.target.midi;
     const ok = pc === target % 12;
     playPiano(sound, ok ? target : Math.floor(target / 12) * 12 + pc);
@@ -78,8 +94,10 @@ export function PracticeScreen() {
       ? '看谱，点出这个音的名字（按钮或琴键）'
       : sess.last.result === 'correct'
         ? '✓ 对！'
-        : `✗ 是 ${midiToName(sess.last.expectedMidi)}`;
+        : `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}`; // 错题回显用题面拼写（答错时 target 停留）
   const clefName = sess.target.clef === 'treble' ? '高音谱' : '低音谱';
+  const chromatic = gamut === 'chromatic';
+  const boardKeys = chromatic ? CHROMATIC_KEYS : NATURAL_KEYS;
 
   return (
     <main className="screen practice">
@@ -88,13 +106,13 @@ export function PracticeScreen() {
         <span>S{state.progress.stage} · {clefName}</span>
         <span className={left <= 5 ? 'timer warn' : 'timer'}>{left}s</span>
       </div>
-      <StaffView midi={sess.target.midi} clef={sess.target.clef} />
+      <StaffView midi={sess.target.midi} clef={sess.target.clef} acc={sess.target.acc} />
       <div className={`fb ${fb}`} data-testid="feedback">
         {fbText}
       </div>
-      <div className="row">
-        {PITCH_BUTTONS.map((b) => (
-          <NoteButton key={b} label={b} onClick={() => onTap(b)} />
+      <div className={`row note-keys${chromatic ? ' chromatic' : ''}`}>
+        {boardKeys.map((k) => (
+          <NoteButton key={k.label} label={k.label} variant={k.black ? 'black' : 'natural'} onClick={() => onTap(k.pc)} />
         ))}
       </div>
       <Piano onKey={onKey} />

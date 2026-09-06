@@ -12,6 +12,13 @@ export function SettingsScreen() {
             {state.settings.sound ? '开' : '关'}
           </button>
         </div>
+        <div className="row"><span>练黑键（变化音）</span>
+          <button className="sel small" data-testid="gamut-toggle" onClick={() => setState((p) => ({
+            ...p, settings: { ...p.settings, gamut: (p.settings.gamut ?? 'natural') === 'chromatic' ? 'natural' : 'chromatic' },
+          }))}>
+            {(state.settings.gamut ?? 'natural') === 'chromatic' ? '开' : '关'}
+          </button>
+        </div>
         <div className="row"><span>每轮时长</span>
           {[30, 60].map((d) => (
             <button key={d} className="sel small" onClick={() => setState((p) => ({ ...p, settings: { ...p.settings, durationSec: d } }))}>

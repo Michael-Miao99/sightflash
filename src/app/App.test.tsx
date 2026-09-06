@@ -42,6 +42,36 @@ describe('AppRoot', () => {
     expect(await screen.findByText(/清除本地数据/)).toBeInTheDocument();
   });
 
+  it('默认 natural：进入练习后音名板保持 7 键（与现状一致）', async () => {
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await userEvent.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByTestId('staff');
+    expect(document.querySelectorAll('.note-btn')).toHaveLength(7);
+    expect(document.querySelectorAll('.note-btn.black-name')).toHaveLength(0);
+  });
+
+  it('设置开练黑键：设置持久化，练习屏音名板 12 键含 5 个双名黑键键', async () => {
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    await userEvent.click(screen.getByRole('button', { name: /设置/ }));
+    await screen.findByText(/清除本地数据/);
+    const toggle = screen.getByTestId('gamut-toggle');
+    expect(toggle).toHaveTextContent('关');
+    await userEvent.click(toggle);
+    expect(screen.getByTestId('gamut-toggle')).toHaveTextContent('开');
+    await userEvent.click(screen.getByRole('button', { name: '返回' }));
+    await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await userEvent.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByTestId('staff');
+    expect(document.querySelectorAll('.note-btn')).toHaveLength(12);
+    expect(document.querySelectorAll('.note-btn.black-name')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'C#/Db' })).toBeInTheDocument();
+  });
+
   it('IndexedDB 打开失败时内存降级，不卡在载入中', async () => {
     // 模拟真实环境：indexedDB 存在但不可用（隐私模式/存储禁用）→ IdbRepo.openDB 失败
     vi.stubGlobal('indexedDB', {});
