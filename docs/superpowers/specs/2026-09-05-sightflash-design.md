@@ -410,3 +410,77 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 - 门禁：vitest 全量（`--maxWorkers=1`）＋`npx tsc -b`＋`npm run build`。
 - 真机验收：四主题逐套过 **首页 / 设置 / 练习（横竖屏）/ 数据 / 结算**；浅色两套重点看谱墨可读性与琴键/纸白协调；classic 与改前观感逐屏一致。
 - README：设置可切四主题 + 默认说明。
+
+## §27 里程碑 B：跟弹模式（真琴 · 麦克风音高判定）（2026-09-06 设计定稿，尚未实现）
+
+> **老板定夺（两问两答 + 一问）**：目标琴 = **声学真钢琴（麦克风听音）**；玩法 = **看谱 → 真琴弹 → 判对错**；判题节奏 = **首击成败 + 试错不扣分**。技术路线 = **纯自研轻量 YIN（主线程 AnalyserNode + 起音门，无依赖）**。
+> 本增补在 §4–§8 / §13–§17 的跟弹原设计之上，补齐里程碑 A 实际代码演化后的落地细节（模式贯通、首击记账、校准视图、练习屏布局、统计隔离、低音谐波风险），并把 §5/§8 对跟弹作答记账的空泛表述落实为「首击成败」。**认音模式（tap）行为零改动**。
+
+### 27.1 范围与模式贯通
+- 新增 `type Mode = 'tap' | 'play'`（认音 / 跟弹）；`Settings.lastMode: Mode`；`SessionRecord.mode: Mode`。`defaultState()` 加 `lastMode:'tap'`；老存档缺字段读时 `?? 'tap'`（沿用 §24 gamut 兜底模式，无需迁移）。
+- `Mode` 贯通全链：`SessionConfig.mode` → `Session.mode` → `finalizeSession` 以 `mode` 写 `record.mode`（现 `finalize.ts:52` 硬编码 `'tap'` 改为透传，缺省 `'tap'` 保既有测试/调用）。
+- SetupScreen 顶部加「模式」分段（认音 / 跟弹），写 `settings.lastMode`；下方谱号选择/解锁逻辑不变（`clefUnlockStage`、`lastClef` 两模式共用）。App 视图开关 `View` 增加 `'calibrate'`。谱号、`gamut`（升降音）、`durationSec`、`sound`、`theme` 两模式全共享。
+- 阶段/错音池/打卡/连击跨模式共享（认音 S 与跟弹 S 同进同出；§6「全局阶段制」语义覆盖到模式间）。统计隔离见 27.6。
+- 出题复用：`chooseQuestion(rng, stage, clef, wrong, prev, gamut)` 与各阶段池（高 C4~G5 / 低 G2~C4）原样复用——真琴 88 键天然覆盖，无输入侧音域问题。谱面/StaffView/GrandStaffView、♯/♭ 记号（§24）零改动。
+
+### 27.2 判题语义：首击成败（play 专用，新增纯函数 `answerPlay`）
+- `core/session.ts` 新增 `export function answerPlay(s: Session, playedMidi: number): Session`（`playedMidi` 为起音的浮点 MIDI，见 27.3 `matches`），语义：
+  - **只判每题第一个起音**。新题未判过（`s.history[0]?.expectedMidi !== s.target.midi`，因 `chooseQuestion` 邻避保证新目标 midi 必与上题不同）→ 该音定此题：
+    - `matches(playedMidi, s.target.midi)`（±30 音分，见 27.3）：记 `HistoryItem{correct}`、`total+1`、`correct+1`、`chooseQuestion` 推进下一题；
+    - 否则：记 `{wrong}`、`total+1`、**题目停留**、`s.last` 置该次，继续听音。
+  - **题目已判过（首击错、停留中）**：再弹错**不再记入 history / 不再 `total+1`**（试错不扣分）；**弹到对键**（`matches`）→ 推进下一题、**不新增记录**（此题成绩已按首击定格为错，仅 `s.last` 置一次 `correct` 供 ✓ 反馈）。
+  - 卡到轮次超时：此题已按首击结果结算，无需额外处理。
+  - `computeWrongDeltas` 只读 history，不受非记分次影响。**偏差文案与历史字段解耦**：反馈区"你弹了 X（偏差）"由起音事件自带 `{midi, cents}` + 当前 `sess.target` 现算 `deviationLabel`，不落 `HistoryItem`（`HistoryItem` 保持现字段、v1 不新增实际八度/音分持久化；history 记分项的 `actualPc = round(playedMidi) % 12`）。
+- 判定粒度 = **目标 ±30 音分（§8⑤沿用）**：30¢ ≪ 半音，故「同音」自动蕴含八度一致（落在目标 30¢ 内不可能是别的键），无需单列八度比较。`matches` 即判对谓词（见 27.3）。实际作答键为 `♯/♭` 等音拼写差异与频率无关（同一键一个频率），无需消歧。
+- 判对/判错视觉沿用（绿/红 + ✓/✗）；跟弹**不自动播正确答案音**（§20.2 原则沿用：不靠听音反推），判对可播目标音、判错播实际作答音（沿用钢琴合成 §20.2，仅作确认）。
+- 偏差文案（弹错提示"你弹了 G4，偏高 2 个半音"）由纯函数生成：同音名差八度 →「低了/高了八度」；同八度差 N 半音 →「偏高/偏低 N 个半音」；跨名+跨八度 →「你弹的是 X」。
+
+### 27.3 音频模块（`src/core/audio/` 纯 TS，无框架、可离线单测）
+- `yin.ts`：`export function yinPitch(buf: Float32Array, sampleRate: number): number | null`——YIN 自相关（差函数、CMND、阈值、抛物线插值），返回基频 Hz，无稳定基频返 `null`。fftSize/窗长按 44.1k/48k 取样可容（2048 帧 ≈ 43ms 足够 YIN；最低出题音 G2≈98Hz 窗内 ≥4 周期）。
+- `pitch.ts`：频率↔MIDI 换算与比对，纯函数：
+  - `hzToMidi(hz)`（69 + 12·log₂(f/440)）、`midiToHz(midi)`（与播放引擎现有换算收敛于此，播放侧可改 import 复用，避免双源）；
+  - 量化 `roundToMidi(f)`；`centsBetween(a, b)` 有符号音分差（MIDI 域，1 半音 = 100¢）；
+  - **判对谓词 `matches(playedMidi: number, targetMidi: number, tolCents = 30): boolean`** ⇔ `Math.abs(playedMidi − targetMidi) × 100 ≤ tolCents`（§8⑤ ±30 音分容差，由判题与校准共用）；
+  - `deviationLabel(playedMidi, targetMidi): string`（27.2 文案，供 UI 与校准复用以保证措辞一致）。
+- `onset.ts`：起音门状态机（无浏览器依赖、可脚本化测试）：输入每帧 `(rms, pitchHz|null)`，输出事件。规则：
+  - **静音 → 起音**：能量跳变过阈 + 音高稳定（≥ ~60ms、漂移 ≤ ±25¢）才判定为「一次弹奏」；短促噪声/说话/拍键的瞬时能量**不通过**（稳定性门）。
+  - **触发后闭锁**：判定后 ~120ms 消抖（防同键释放重采）；需**松键（静音段）或换到 ≥ ~2 半音的新音**才允许下一次触发——踏板连住同音不重复判题。
+  - 输出约化事件 `{ midi: number, cents: number }`。
+- 浏览器胶水 `useMicPitch`（React hook，放 `src/ui/`）：包 `getUserMedia → AudioContext(resume) → AnalyserNode(fftSize 2048) → rAF` 驱动上面三个纯模块。产出两类消费：
+  - **起音事件**（逐次回调，进判题）；
+  - **实时指示**（~10Hz 节流：音量条 + 当前识别音名或 `-`），避免 60fps 重渲染。
+  - 提供 `start()/stop()` 与错误回调（拒绝/无设备/不支持）。媒体流模块级单例：校准页获取后**不关闭**、沿用进练习屏，练习结束（到点结算/离开/卸载）统一 `stop()` 释放——避免重复弹授权框，践行 §10 隐私（只实时处理、不上传、不留存）。
+
+### 27.4 校准页（play 前必经，新增视图 `calibrate`）
+- 流程：Setup 选「跟弹」点开始 → 进校准页 → 首屏「请求麦克风」按钮（用户手势内才 `getUserMedia`/`resume`，iOS Safari 必需）→ 授权后实时显示「现在听到：`C4` ✓ / 音量条」→ 弹任意音确认识别准（弹低音 G2 附近重点验证，见 27.7）→「开始 60s 练习」进入 practice（此刻才启动轮次倒计时）。
+- 首访需明确提示用途 + 隐私（只实时判音、不录制不上传）；拒绝/无权限 → 引导开启路径 + 可返回 setup 换认音。
+- 校准通过后关闭校准、进入 practice；校准页返回 setup 时释放流。
+
+### 27.5 练习屏（play 版式）
+- play 作答面 = 麦克风，**音名板（.note-keys）与仿真键盘（.piano）隐藏**（避免误当答题入口）；谱面 + 倒计时 + 反馈区 + 布局骨架沿用。
+- 新增「实时听音指示器」槽位：音量条 + 当前识别音名（无声显 `-`），既是校准余韵也提示麦克风活着；兼作首击反馈区上下的偏差文案容器。
+- 逃生（避免真琴上卡死烧轮次）：题目**首击判错停留后**，反馈区出现小号 **[键位提示]**（展开后调用现有 `Piano` 组件以非交互态高亮目标键，用毕可收起；平时不占屏）与 **[下一题]**（推进下一题，此题成绩已定格）。卡住但不点逃生 → 等到点自动结算。
+- 版式：横屏沿用 §22 flex 骨架（100dvh / overflow hidden）；`.piano` 的 `flex:1` 吸高槽位改由指示器/反馈/留白吸收，谱面上限（`.staff-wrap` max-width / `.grand-staff` clamp）在真机预算内可略放宽；CSS 微调，**不改 StaffView/GrandStaffView 几何与绘制**。竖屏本就短页可滚动，不追求同规格。
+
+### 27.6 数据与统计隔离
+- 打卡/连击/每日目标跨模式累加（无论哪种练都算）；`SessionRecord.mode` 如实区分。
+- **统计视图（StatsScreen）加「模式」筛选分段：全部 / 认音 / 跟弹**，作用于趋势图与错音列表（认音逐键准确率与跟弹首击准确率本不可比，混在一起曲线失真）；缺省「全部」向后兼容。聚合函数加 mode 过滤入参（纯函数可测）。打卡区不设筛选。
+
+### 27.7 错误处理与边界（沿用 §14，真琴语境落地）
+- **低音谐波八度风险**：极低音（G2≈98Hz 一带）手机麦基频弱、YIN 可能锁高一八度 → 判错并显示实际音名（"你弹了 G3？"帮助定位）；**校准页让老板试弹低音验证**；README 真机清单含各八度试弹。若真机偏差稳定，优先调 YIN 低音候选偏好（取 τ 最小谷值方向），不在 UI 层面打补丁。
+- 无/拒绝权限：校准页引导；认音不受影响。浏览器不支持 WebAudio/getUserMedia：功能检测，提示并禁用「跟弹」入口，认音仍可用。
+- 太安静：指示器显示无声；同题 10s 无起音 → 轻提示「没听到，请弹响该键」（不扣分、不卡题）。
+- 噪声/多音/说话：起音门稳定性不过 → **不计题、不出错**（§8 兜底语义落实）。
+- 弹琴中途流中断（后台切回/权限被撤）：按已作答进度提前结算（复用 finalize）+ 提示，不静默丢轮。
+
+### 27.8 测试与验收
+- 单测（纯模块离线喂样，jsdom 组件）：
+  - `yin`：合成正弦（含相位/小幅噪底）→ 期望 Hz 落容差；白噪/静音 → `null`。
+  - `pitch`：`hzToMidi` 往返（440→69、C4/G5/G2 边界）、`deviationLabel` 各文案分支。
+  - `onset`：脚本化帧序列驱动——起音触发、松键后可再触发、同键持续不重触发、瞬时噪声/无稳定音高不过门、闭锁期内忽略。
+  - `answerPlay`（首击语义全分支）：首击对→记正确+推进；首击错→记错+停留+`total` 不变再试、再错不增 `total`；停留后弹对→推进不新增记录；老 `answerTap/answerKey` 行为不变（既有用例零改动）。
+  - 贯通：`finalize` 记 `mode`（play/tap）；Setup 模式分段持久化 `lastMode`；校准页组件（授权态/已授权实时读）；StatsScreen 模式筛选（内存 repo 造 play+tap 记录断言过滤）。
+  - 布局 CSS 无法 jsdom 断言 → 走门禁回归 + 真机。
+- 门禁：vitest 全量（本机 `--maxWorkers=1`）＋ `npx tsc -b` ＋ `npm run build`。
+- 真机验收（README 里程碑 B 清单新增）：手机 https 进（`npm run tunnel`，§16）→ 选跟弹 → 授权 → 校准页试弹各八度（**重点 G2 低音**，确认不锁高一八度）→ 练一轮：看谱弹对即进下一题、首音弹错红闪提示偏差并可试到对键、找音过程不把准确率打崩、**踏板连音/快速重复音不误判**、嘈杂房间不误触发、轮末结算 + 记录 mode=play、数据页模式筛选正确。
+- README：里程碑 B 从「规划中」改「已实现」并同步措辞/验收清单。
