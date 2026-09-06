@@ -89,7 +89,7 @@ button.danger { color: #fca5a5; border-color: #7f1d1d; }
      真机微调优先：此 clamp 值、GrandStaffView 的 SPACE/ANCHOR_TOP/TREBLE_OFFSET，
      以及竖屏 .grand-staff svg 的 max-width。固定件合计≈86 + 谱面≈150 + 键盘≥108 ≈ 366（最紧档 360 恰好）。 */
   .practice .grand-staff { flex: none; margin: 0 auto; }
-  .practice .grand-staff svg { width: auto; height: clamp(150px, 43dvh, 186px); }
+  .practice .grand-staff svg { width: auto; max-width: none; height: clamp(150px, 43dvh, 186px); }
   .practice .piano {
     flex: 1 1 0;
     min-height: 108px;
