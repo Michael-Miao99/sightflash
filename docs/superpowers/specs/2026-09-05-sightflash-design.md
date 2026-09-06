@@ -283,3 +283,44 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 - `PracticeScreen` 去掉传给 `Piano` 的 `clef`（键盘不再依赖谱号）；其余组件不动。
 - 回归：vitest 全量绿（本机 `--maxWorkers=1`）+ `npx tsc -b` + `npm run build`。
 - README 里程碑 A 措辞同步：琴键窗口「3 个八度 + 圆点」→「固定 4 个整八度 C2~C6 + 中央 C 标文字 C4」；真机验收新增混合模式中央 C 位置不动且可见文字 C4、29 白键横屏仍可手按。
+
+## 24. 增补 A1：12 音变化音（黑键）训练 + 全局开关（2026-09-06 五轮试用反馈，已批准）
+> 五轮试用：① 认出黑键/升降号（真钢琴谱会碰到变化音）；② 高低音谱同屏展示（大谱表）→ **本条 = A1 只做 12 音变化音 + 全局开关**；大谱表为紧随其后的 A2（见 §25，尚未写）。本款取代此前「池内只含自然音」「键盘不标字母」「黑键恒为错」等表述在**认音模式**内的适用范围：**默认仍只自然音，行为与今天完全一致**；用户在设置页打开「练黑键」后，音域内的升降号才进入训练。
+> 记谱决策（老板确认）：**升号降号都练**；作答用**12 键音名板**（黑键键按双名标注）；开关放**全局设置**。已确认与 A2 分开交付（A1 先发、真机验收后再做 A2）。
+
+### 24.1 术语与设置
+- 新增 `type Gamut = 'natural' | 'chromatic'`；`Settings.gamut: Gamut`，`defaultState` 缺省 `'natural'`；老存档无此字段按 `'natural'` 处理（读时 `?? 'natural'`，无需数据迁移）。
+- 设置页「练黑键（变化音）」开关：开 → `chromatic`，关 → `natural`。**全局**生效（不按轮选）。
+- `natural`：今天的全部行为不变——池只自然音、音名板 7 键、谱面无升降记号。
+
+### 24.2 音高拼写模型（黑键双记法）
+- 黑键 midi（pc ∈ {1,3,6,8,10}）有**两个等音拼写**：升号拼写用其下方自然音字母 + `#`（如 C#4），降号拼写用其上方自然音字母 + `b`（同音 Db4）。谱表位置 = **拼写字母**所在线/间，记号画在符头左侧（C#4 画在 C4 位置带 ♯；Db4 画在 D4 位置带 ♭）。
+- 新增纯函数（放 `core/notation`，不侵入现有 natural 语义）：
+  - 拼写解析 `spellingOf(midi, acc)`：`acc=null → {letterMidi: midi}`；`acc='#' → letterMidi = midi-1`；`acc='b' → letterMidi = midi+1`。
+  - 名称 `spelledName(midi, acc)` → `"C#4"` / `"Db4"` / 自然 `"C4"`；`midiToName` 保持原语义（升号默认，向后兼容）。
+- 现有 `staffStep / ledgerLinesOf / layoutStaffNote` 全部保持**自然音语义与签名不变**（既有测试不动）；StaffView 对含升降的题先求 `letterMidi`，用 `letterMidi` 算 step/加线，再额外画 ♯/♭ 记号（复用现有字体栈 `Noto Music`）。
+
+### 24.3 出题（池 + 拼写选择）
+- `poolForStage(stage, clef, gamut = 'natural')`：`natural` = 现前缀池（不变）；`chromatic` = 现自然前缀 ∪ 同音域黑键，规则：**对池内每个自然音 m，若 m%12 ∈ {0,2,5,7,9}（C/D/F/G/A，即其上方有黑键）且 m+1 ≤ 池内最大 midi，则加入 m+1**。升序去重。黑键数量随 S 与音域自然增长（如高音 S3 凑满 C4~B4 12 音；S5 高音 20 音、低音 18 音——以规则为准，测试只钉规则与少量不变量，不写死大数组）。
+- `chooseQuestion(rng, stage, clef, wrong, prev, gamut = 'natural')` / `chooseMidi(...gamut)`：签名追加可选 `gamut`（缺省 natural，向后兼容）。**当 gamut=chromatic 且抽中黑键 midi 时，用 rng 50/50 随机选 `acc='#'|'b'`** 存入 `Question.acc`；自然音 `acc=null`。`Question` 追加可选 `acc?: '#' | 'b'`（naturals 恒 null，可缺省）。
+- 错音加权/相邻不重复/混合模式 50/50 切谱逻辑全部沿用；`wrong` 仍按 midi 键控。
+
+### 24.4 会话与作答
+- `SessionConfig`/`Session` 追加**可选** `gamut?: Gamut`（`?? 'natural'` 兜底，避免改动现有测试构造与老调用）。`answerTap/answerKey` 推进下一题时透传 `s.gamut`。
+- 琴键作答不变（白/黑键均精确 midi；chromatic 下黑键可为正确答案）。
+- 音名板：`natural` 仍 7 键（C…B）；`chromatic` 扩为 **12 键**——7 个自然音键 + 5 个黑键键（**双名**标注 `C#/Db` `D#/Eb` `F#/Gb` `G#/Ab` `A#/Bb`，配色区分）。黑键键按**音级**判对（等音同键同 pc）：题目拼写 Db 也点该键即对；谱面负责练"读两种记号"，面板负责"两名对应一键"。按钮映射 pc：自然 LETTER_PC 不变；黑键映射 pc ∈{1,3,6,8,10}。
+- 错题回显（`✗ 是 X`）改按**题面拼写**显示（`sess.target` 在答错时停留，取 target.acc 求 `spelledName`），chromatic 下如 "✗ 是 Db4"；natural 下与现状一致。
+
+### 24.5 界面与 CSS
+- 设置页：加「练黑键（变化音）」行，与「声音/每轮时长」同卡片样式切换。
+- 音名板 `chromatic` 版式：12 键单排，黑键键配色区别于白键键；横屏一行放得下（`.note-btn` 现为 `flex:1; min-width:0` 自适应，竖屏极窄可允许 `flex-wrap`）。字号/间距以 headless 实测（640×360、920×430）微调定稿，列入计划注释；竖屏本就非推荐态（可滚动），不追求与横屏同规格。
+- **A1 不做**：大谱表、横屏一屏预算再分配、键盘窗改任何键宽（A1 只用 round-4 固定 4 八度全半音键盘，黑键已就位）。
+
+### 24.6 测试与验收
+- 拼写：`spellingOf/spelledName` 对 C#4=61/Db4=61/Eb4=63/C#5=73 等返回正确 letterMidi 与名；natural 不变。
+- 池：chromatic 规则不变量（自然子集保留；黑键均在 m+1≤max 内；pc 覆盖；S1 高音只多 C#4 D#4）；natural 池与旧完全一致。
+- generator：chromatic 抽黑键时 `acc` 非空且为 #/b 之一、落在该黑键合法拼写内；natural acc 恒 null/无。
+- session：chromatic 目标黑键答错停留、答对推进；老构造（无 gamut）行为不变。
+- UI：chromatic 下 12 键、natural 下 7 键；点黑键键答对黑键题；错题回显用题面拼写。
+- 设置：gamut 开关持久化、老存档缺字段按 natural。
+- 回归：vitest 全量（本机 `--maxWorkers=1`）＋`npx tsc -b`＋`npm run build`；README 里程碑 A 增「练黑键」说明与验收项；真机验收：开「练黑键」后高/低音题能碰到升降号、谱面记号清晰、12 键面板与琴键黑键均能答对。
