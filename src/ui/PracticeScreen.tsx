@@ -97,7 +97,7 @@ export function PracticeScreen() {
           <NoteButton key={b} label={b} onClick={() => onTap(b)} />
         ))}
       </div>
-      <Piano clef={sess.target.clef} onKey={onKey} />
+      <Piano onKey={onKey} />
     </main>
   );
 }
