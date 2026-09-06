@@ -11,6 +11,7 @@ import { GrandStaffView } from './GrandStaffView';
 import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 import { useMicPitch } from './useMicPitch';
+import { AdvanceBlank } from './advanceBlank';
 import { matches, deviationLabel, roundToMidi } from '../core/audio/pitch';
 import type { OnsetEvent } from '../core/audio/onset';
 
@@ -81,6 +82,10 @@ export function PracticeScreen() {
   }, [isPlay]);
   const quietWarn = isPlay && !finished.current && quiet >= 10;
 
+  // 换题消隐窗（§27 补）：判对推进/逃生换题后短窗内吞掉上一音的余音起音，防误判新题。
+  // 用 ref 持实例（render 间不变）；纯逻辑见 advanceBlank.ts。
+  const blank = useRef(new AdvanceBlank());
+
   // 流中断（后台/权限被撤）→ 提前结算：走同一条倒计时结算路径（§27.7）
   useEffect(() => {
     if (!isPlay) return;
@@ -117,9 +122,11 @@ export function PracticeScreen() {
   // ---- 跟弹：起音 → 判题（首击成败，§27.2）----
   function onPlayOnset(e: OnsetEvent): void {
     if (!isPlay) return;
+    if (blank.current.blanked()) return; // 换题消隐窗内：上一音余音/重音头，非本题作答，丢弃（§27 补）
     const played = e.midi + e.cents / 100; // 实际音高（含音分偏差）
     const target = sess.target.midi;
     const ok = matches(played, target);
+    if (ok) blank.current.shield(); // 命中即换题 → 开窗吞紧随的旧音尾（错则停留不 shield，可立即试弹）
     playPiano(sound, ok ? target : e.midi); // 判对播目标音、判错播实际作答音（仅作确认，§20.2）
     setFb({ kind: ok ? 'ok' : 'bad', text: ok ? '✓ 对！' : deviationLabel(played, target) });
     setQuiet(0);
@@ -129,6 +136,7 @@ export function PracticeScreen() {
   // ---- 跟弹逃生（§27.5）：首击判错停留后出现 ----
   const stuck = isPlay && sess.last?.result === 'wrong';
   function onSkip() {
+    blank.current.shield(); // 逃生换题同开窗：吞旧音尾（§27 补）
     setSess((s) => skipQuestion(s));
     setFb({ kind: 'idle', text: PLAY_IDLE });
     setShowHint(false);

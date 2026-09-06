@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { cleanup, screen, render } from '@testing-library/react';
+import { act, cleanup, screen, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { AppRoot } from './App';
@@ -14,6 +14,7 @@ const mic = vi.hoisted(() => {
   return {
     _set(s: string) { status = s; subs.forEach((l) => l()); },
     _pushLevel(l: number, m: number | null) { handler?.onLevel(l, m); },
+    _pushOnset(midi: number, cents: number) { handler?.onOnset({ midi, cents }); },
     micGetStatus: () => status,
     micSubscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
     micSetHandlers: (h: typeof handler) => { handler = h; },
@@ -128,6 +129,20 @@ describe('练习屏 play 版式与逃生（§27.5，mock micSource）', () => {
     await goPlay(() => {});
     mic._pushLevel(0.5, 60); // C4
     expect(await screen.findByTestId('live-name')).toHaveTextContent('现在听到：C4');
+  });
+
+  it('逃生换题后紧跟的旧音起音被消隐窗丢弃，不误判新题（§27 补回归）', async () => {
+    await goPlay(() => {});
+    // 首击弹错（midi 21 远离 S1 高音池）→ 判错停留、出逃生行
+    await act(async () => { mic._pushOnset(21, 0); });
+    expect(await screen.findByTestId('escape-row')).toBeInTheDocument();
+    // 点 [下一题] 逃生换题 → 起消隐窗
+    await userEvent.setup().click(screen.getByTestId('escape-skip'));
+    // 紧跟的"旧音余音"起音：若未被吞会判错新题 → feedback 跳"你弹了…"且逃生行重现；
+    // 被吞则保持待听引导。包 act() 让 React flush 后再断言，避免读到旧 DOM 的假阳性。
+    await act(async () => { mic._pushOnset(21, 0); });
+    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
+    expect(screen.queryByTestId('escape-row')).toBeNull(); // 未误判 → 逃生行不重现
   });
 
   afterEach(() => {
