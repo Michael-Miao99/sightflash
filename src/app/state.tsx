@@ -3,16 +3,15 @@ import type { AppState } from '../core/storage/types';
 import type { SightRepo } from '../core/storage/memory';
 import { MemoryRepo } from '../core/storage/memory';
 import { IdbRepo, initialState } from './indexeddb';
-import type { MixedClef, Gamut } from '../core/generator/stages';
+import type { MixedClef } from '../core/generator/stages';
 
 export type View = 'home' | 'setup' | 'practice' | 'result' | 'stats' | 'settings';
 
-/** 测试缝：以 AppRoot/AppProvider 的 seed 覆盖初始 progress.stage 与 settings.lastClef/gamut。
+/** 测试缝：以 AppRoot/AppProvider 的 seed 覆盖初始 progress.stage 与 settings.lastClef。
  *  缺省 = initialState()，与产品行为完全一致；自动路径仍以 IndexedDB 首次载入为准。 */
 export interface SeedState {
   stage?: number;
   lastClef?: MixedClef;
-  gamut?: Gamut;
 }
 
 export function seededState(seed?: SeedState): AppState {
@@ -24,7 +23,6 @@ export function seededState(seed?: SeedState): AppState {
     settings: {
       ...def.settings,
       lastClef: seed.lastClef ?? def.settings.lastClef,
-      gamut: seed.gamut ?? def.settings.gamut,
     },
   };
 }

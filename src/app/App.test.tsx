@@ -90,8 +90,8 @@ describe('AppRoot', () => {
     expect(screen.getByText(/大谱表/)).toBeInTheDocument(); // 表头
   });
 
-  it('seed stage1+treble：单谱模式仍渲染单行 StaffView（分支不串扰）', async () => {
-    render(<AppRoot repoKind="memory" seed={{ stage: 1, lastClef: 'treble' }} />);
+  it('seed stage3+treble：单谱模式仍渲染单行 StaffView（谱型由 clef 决定而非 stage）', async () => {
+    render(<AppRoot repoKind="memory" seed={{ stage: 3, lastClef: 'treble' }} />);
     await screen.findByText(/五线速读/);
     await userEvent.click(screen.getByRole('button', { name: /开始训练/ }));
     await screen.findByText(/选择谱号/);

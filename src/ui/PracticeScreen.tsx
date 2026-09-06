@@ -96,7 +96,7 @@ export function PracticeScreen() {
       : sess.last.result === 'correct'
         ? '✓ 对！'
         : `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}`; // 错题回显用题面拼写（答错时 target 停留）
-  const clefName = cfg.clef === 'mixed' ? '大谱表' : sess.target.clef === 'treble' ? '高音谱' : '低音谱';
+  const clefName = cfg.clef === 'mixed' ? '大谱表' : cfg.clef === 'treble' ? '高音谱' : '低音谱';
   const chromatic = gamut === 'chromatic';
   const boardKeys = chromatic ? CHROMATIC_KEYS : NATURAL_KEYS;
 
