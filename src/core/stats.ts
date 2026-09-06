@@ -9,7 +9,7 @@ export interface Point {
 }
 
 function byMode(sessions: SessionRecord[], mode: ModeFilter): SessionRecord[] {
-  return mode === 'all' ? sessions : sessions.filter((s) => s.mode === mode);
+  return mode === 'all' ? [...sessions] : sessions.filter((s) => s.mode === mode);
 }
 
 /** 每次练习的速度（按时间升序）；mode='all' 时含两模式 */
