@@ -1,5 +1,10 @@
 import type { MixedClef, Gamut } from '../generator/stages';
 
+/** 主题 id：paper 暖纸乐稿（默认）/ ebony 乌木暖夜 / ink 极简墨白 / classic 经典深色 */
+export type ThemeId = 'paper' | 'ebony' | 'ink' | 'classic';
+export const DEFAULT_THEME: ThemeId = 'paper';
+export const THEME_IDS: readonly ThemeId[] = ['paper', 'ebony', 'ink', 'classic'] as const;
+
 export type Mode = 'tap'; // 里程碑 B 加 'play'（跟弹）
 
 export interface Progress {
@@ -13,6 +18,7 @@ export interface Settings {
   lastMode: Mode;
   lastClef: MixedClef;
   gamut: Gamut; // 练黑键（变化音）全局开关
+  theme: ThemeId; // 主题（§26）：paper|ebony|ink|classic，缺省回落 DEFAULT_THEME
 }
 
 export interface Streak {
