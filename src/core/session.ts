@@ -86,9 +86,11 @@ export function answerKey(s: Session, midi: number): Session {
 
 /**
  * 跟弹作答（pure，§27.2 首击成败）：playedMidi 为起音的实际浮点 MIDI（可含音分偏差）。
- * 只判每题第一个起音：未判过（history[0].expectedMidi !== 当前 target.midi，邻避保证其必不同）
- * → 命中(matches ±30¢)记 correct 并推进；不中记 wrong 停留。
- * 题目已判过（首击错、停留中）→ 试错不再记 history / 不 total+1；终于弹对(matches)推进、不新增记录，
+ * 只判每题第一个起音："本题是否已判"直接看状态机——停在本题当且仅当 last 是对本题首击错的定格
+ * （last.result==='wrong' && last.expectedMidi===target.midi）；推进/逃生后 last 只会是 null 或上一题的记录，
+ * 故不依赖邻避也能把"相邻同音的新题"正确判为首击（终审回归：邻避只是概率性，见 generator 重抽上限）。
+ * 首击 → 命中(matches ±30¢)记 correct 并推进；不中记 wrong 停留。
+ * 已判过（首击错、停留中）→ 试错不再记 history / 不 total+1；终于弹对(matches)推进、不新增记录，
  * 仅 last 置一次 correct 供 ✓ 反馈。
  * 判定粒度 ±30¢≪半音 ⇒ 同音自动蕴含八度一致（无需单列八度比较）。
  */
@@ -102,7 +104,8 @@ export function answerPlay(s: Session, playedMidi: number): Session {
     expectedPc: target.midi % 12,
     actualPc: ((roundMidi % 12) + 12) % 12,
   };
-  const firstShot = s.history[0]?.expectedMidi !== target.midi; // 该题首击是否已定
+  // 该题首击是否已定：停在本题（last 是对本题首击错的定格）才算已判；其余（新题 / 推进后同音再现）都算首击
+  const firstShot = !(s.last?.result === 'wrong' && s.last?.expectedMidi === target.midi);
   const advance = ok ? chooseQuestion(s.rng, s.stage, s.clef, s.wrong, target.midi, s.gamut) : target;
   if (firstShot) {
     return {

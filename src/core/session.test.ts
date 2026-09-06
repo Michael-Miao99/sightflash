@@ -187,4 +187,18 @@ describe('answerPlay 首击成败（跟弹，§27.2）', () => {
     expect(next.correct).toBe(0);
     expect(next.total).toBe(1);
   });
+
+  it('相邻同音（rng 恒 0 → 邻避重抽上限命中 prev）时新题仍按首击判定（终审回归）', () => {
+    // S1 高音 natural 池 [60,62,64]；rng=0 使 pickWeighted 恒取池首 → 答对推进后新题仍 60（相邻同音复现）。
+    const s = createSession({ stage: 1, clef: 'treble', durationSec: 60, rng: () => 0, wrong: {} });
+    expect(s.target.midi).toBe(60);
+    const a = answerPlay(s, 60.0); // 首题命中 → total+1、推进
+    expect(a.total).toBe(1);
+    expect(a.correct).toBe(1);
+    expect(a.target.midi).toBe(60); // 相邻同音
+    const b = answerPlay(a, 60.0); // 必须是新题首击（不能当成停留题试错）
+    expect(b.total).toBe(2);
+    expect(b.correct).toBe(2);
+    expect(b.history).toHaveLength(2);
+  });
 });
