@@ -1,20 +1,27 @@
-import type { SessionRecord } from './storage/types';
+import type { Mode, SessionRecord } from './storage/types';
+
+/** 统计模式筛选：全部（缺省）/ 认音 tap / 跟弹 play。只作用于 sessions 驱动的曲线（§27.6）。 */
+export type ModeFilter = Mode | 'all';
 
 export interface Point {
   ts: number;
   value: number;
 }
 
-/** 每次练习的速度（按时间升序） */
-export function speedTrend(sessions: SessionRecord[]): Point[] {
-  return [...sessions]
+function byMode(sessions: SessionRecord[], mode: ModeFilter): SessionRecord[] {
+  return mode === 'all' ? sessions : sessions.filter((s) => s.mode === mode);
+}
+
+/** 每次练习的速度（按时间升序）；mode='all' 时含两模式 */
+export function speedTrend(sessions: SessionRecord[], mode: ModeFilter = 'all'): Point[] {
+  return byMode(sessions, mode)
     .sort((a, b) => a.ts - b.ts)
     .map((s) => ({ ts: s.ts, value: s.speed }));
 }
 
-/** 最近 20 次准确率（时间升序） */
-export function latestAccuracies(sessions: SessionRecord[]): number[] {
-  return [...sessions]
+/** 最近 20 次准确率（时间升序）；mode='all' 时含两模式 */
+export function latestAccuracies(sessions: SessionRecord[], mode: ModeFilter = 'all'): number[] {
+  return byMode(sessions, mode)
     .sort((a, b) => a.ts - b.ts)
     .slice(-20)
     .map((s) => s.accuracy);
