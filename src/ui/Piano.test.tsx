@@ -37,3 +37,33 @@ describe('Piano', () => {
     expect(onKey).toHaveBeenCalledWith(63);
   });
 });
+
+describe('Piano readOnly / highlight（§27.5 [键位提示]）', () => {
+  it('readOnly 时不响应按键，容器带 .readonly', () => {
+    const onKey = vi.fn();
+    const { container } = render(<Piano onKey={onKey} readOnly />);
+    fireEvent.pointerDown(screen.getByTestId('w-60'));
+    fireEvent.pointerDown(screen.getByTestId('b-61'));
+    expect(onKey).not.toHaveBeenCalled();
+    expect(container.querySelector('.piano')?.classList.contains('readonly')).toBe(true);
+  });
+
+  it('highlight 给目标键加 .hl（白/黑皆可），其余键不加', () => {
+    const onKey = vi.fn();
+    const { rerender } = render(<Piano onKey={onKey} highlight={62} />);
+    expect(screen.getByTestId('w-62').classList.contains('hl')).toBe(true);
+    expect(screen.getByTestId('w-60').classList.contains('hl')).toBe(false);
+    rerender(<Piano onKey={onKey} highlight={61} />);
+    expect(screen.getByTestId('b-61').classList.contains('hl')).toBe(true);
+    expect(screen.getByTestId('w-62').classList.contains('hl')).toBe(false);
+  });
+
+  it('默认（不传）行为与旧版一致：可点、无 .readonly/.hl', () => {
+    const onKey = vi.fn();
+    const { container } = render(<Piano onKey={onKey} />);
+    fireEvent.pointerDown(screen.getByTestId('w-62'));
+    expect(onKey).toHaveBeenCalledWith(62);
+    expect(container.querySelector('.piano')?.classList.contains('readonly')).toBe(false);
+    expect(screen.queryByText('', { selector: '.hl' })).toBeNull();
+  });
+});

@@ -22,17 +22,30 @@ function blacks(lo: number, hi: number): number[] {
   return out;
 }
 
+export interface PianoProps {
+  onKey: (midi: number) => void;
+  /** 只读展示：不响应按键（§27.5 [键位提示] 的非交互态） */
+  readOnly?: boolean;
+  /** 高亮某键（目标音）：该键加 .hl（光圈由 .piano .key.hl 样式呈现） */
+  highlight?: number;
+}
+
 /** 仿真钢琴键盘：点击琴键（白/黑）回调 onKey(midi)。画出来由调用方决定发声与判定。
- *  仅中央C(C4) 白键标注文字 "C4"，其余琴键无任何额外标记。 */
-export function Piano({ onKey }: { onKey: (midi: number) => void }) {
+ *  仅中央C(C4) 白键标注文字 "C4"，其余琴键无任何额外标记。
+ *  readOnly=true 时键不响应点击（pointer-events 收在 .piano.readonly 样式）；highlight 高亮目标键。 */
+export function Piano({ onKey, readOnly = false, highlight }: PianoProps) {
   const whites = useMemo(() => naturals(LO, HI), []);
   const blackList = useMemo(() => blacks(LO, HI), []);
   const whiteIdx = useMemo(() => new Map(whites.map((m, i) => [m, i])), [whites]);
   return (
-    <div className="piano" role="group" aria-label="钢琴键盘">
+    <div className={`piano${readOnly ? ' readonly' : ''}`} role="group" aria-label="钢琴键盘">
       {whites.map((m) => (
-        <div key={m} data-testid={`w-${m}`} data-midi={m} className="key white"
-          onPointerDown={(e) => { e.preventDefault(); onKey(m); }}>
+        <div key={m} data-testid={`w-${m}`} data-midi={m}
+          className={`key white${m === highlight ? ' hl' : ''}`}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            if (!readOnly) onKey(m);
+          }}>
           {m === MIDDLE_C && <span className="c4" data-testid="c4-marker">C4</span>}
         </div>
       ))}
@@ -41,9 +54,13 @@ export function Piano({ onKey }: { onKey: (midi: number) => void }) {
         const left = ((i + 1 - BLACK_W / 2) / whites.length) * 100;
         const width = (BLACK_W / whites.length) * 100;
         return (
-          <div key={m} data-testid={`b-${m}`} data-midi={m} className="key black"
+          <div key={m} data-testid={`b-${m}`} data-midi={m}
+            className={`key black${m === highlight ? ' hl' : ''}`}
             style={{ left: `${left}%`, width: `${width}%` }}
-            onPointerDown={(e) => { e.preventDefault(); onKey(m); }} />
+            onPointerDown={(e) => {
+              e.preventDefault();
+              if (!readOnly) onKey(m);
+            }} />
         );
       })}
     </div>
