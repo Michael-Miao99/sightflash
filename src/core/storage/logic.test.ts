@@ -6,6 +6,7 @@ describe('storage logic 状态机', () => {
     const s = defaultState();
     expect(s.progress.stage).toBe(1);
     expect(s.progress.wrong).toEqual({});
+    expect(s.settings.gamut).toBe('natural'); // 练黑键（变化音）默认关
   });
 
   it('streak：连续日期递增，断签重置，同日幂等', () => {

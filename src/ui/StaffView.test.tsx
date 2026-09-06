@@ -23,3 +23,28 @@ describe('StaffView', () => {
     expect(y(low.container)).toBeGreaterThan(y(high.container));
   });
 });
+
+describe('StaffView 变化音记号', () => {
+  it('acc="#" 黑键：渲染 ♯ 记号，且谱面锚在拼写字母（C#4 与 C4 同 cy）', () => {
+    const { container } = render(<StaffView midi={61} clef="treble" acc="#" />);
+    const accEl = container.querySelector('[data-testid="accidental"]');
+    expect(accEl).not.toBeNull();
+    expect(accEl!.textContent).toBe('♯');
+    const cy = container.querySelector('.note-head')!.getAttribute('cy');
+    const { container: c2 } = render(<StaffView midi={60} clef="treble" />);
+    expect(cy).toBe(c2.querySelector('.note-head')!.getAttribute('cy')); // C#4 锚 C4 位置
+  });
+
+  it('acc="b" 黑键：锚在上方自然音（Db4 与 D4 同 cy）', () => {
+    const { container } = render(<StaffView midi={61} clef="treble" acc="b" />);
+    expect(container.querySelector('[data-testid="accidental"]')!.textContent).toBe('♭');
+    const cy = container.querySelector('.note-head')!.getAttribute('cy');
+    const { container: c2 } = render(<StaffView midi={62} clef="treble" />);
+    expect(cy).toBe(c2.querySelector('.note-head')!.getAttribute('cy'));
+  });
+
+  it('自然音（无 acc）不渲染记号元素', () => {
+    const { container } = render(<StaffView midi={60} clef="treble" />);
+    expect(container.querySelector('[data-testid="accidental"]')).toBeNull();
+  });
+});

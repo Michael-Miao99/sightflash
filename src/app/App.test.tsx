@@ -53,7 +53,7 @@ describe('AppRoot', () => {
     expect(document.querySelectorAll('.note-btn.black-name')).toHaveLength(0);
   });
 
-  it('设置开练黑键：设置持久化，练习屏音名板 12 键含 5 个双名黑键键', async () => {
+  it('设置开练黑键后：同一载入内回首页再进练习，音名板 12 键含 5 个双名黑键键', async () => {
     render(<AppRoot repoKind="memory" />);
     await screen.findByText(/五线速读/);
     await userEvent.click(screen.getByRole('button', { name: /设置/ }));
