@@ -109,10 +109,9 @@ export function PracticeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);
 
-  // 卸载兜底释放（真实离开 practice 路径：到点结算 / 浏览器导航等）
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => { mic.stop(); }, []);
-
+  // 离开练习屏的唯一出口是结算 effect（已 if (isPlay) mic.stop()）；浏览器刷新/关闭由页面卸载自动释放流。
+  // 注意：勿在此加"卸载即 mic.stop()"兜底 —— React StrictMode 开发态首挂会模拟一次卸载再重挂，
+  // 会把校准页沿用进来的 running 流误杀，触发流中断提前结算（§27.3 沿用语义与它冲突）。
   const sound = state.settings.sound;
 
   // ---- 跟弹：起音 → 判题（首击成败，§27.2）----

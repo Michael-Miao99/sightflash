@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { cleanup, screen, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
@@ -17,7 +18,7 @@ const mic = vi.hoisted(() => {
     micSubscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
     micSetHandlers: (h: typeof handler) => { handler = h; },
     micRequest: vi.fn(async () => status),
-    micStop: vi.fn(),
+    micStop: vi.fn(() => { status = 'idle'; subs.forEach((l) => l()); }), // 模拟真 stop：置 idle + 通知订阅
   };
 });
 vi.mock('../ui/micSource', () => ({
@@ -130,6 +131,42 @@ describe('练习屏 play 版式与逃生（§27.5，mock micSource）', () => {
   });
 
   afterEach(() => {
+    mic._set('idle');
+    mic.micStop.mockClear();
+    mic.micRequest.mockClear();
+  });
+});
+
+describe('StrictMode 下校准沿用流不被误杀（§27.3 回归）', () => {
+  it('dev 双挂载后仍留在练习屏正常倒计时，不会直接跳到本轮完成', async () => {
+    // React dev StrictMode 首挂会模拟一次"卸载→重挂"。若练习屏卸载兜底调 mic.stop()，
+    // 会把校准沿用进来的 running 流杀掉 → 流中断分支 setLeft(0) → 直接结算（真机 dev 复现）。
+    const u = userEvent.setup();
+    render(
+      <StrictMode>
+        <AppRoot repoKind="memory" />
+      </StrictMode>,
+    );
+    await screen.findByText(/五线速读/);
+    await u.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择模式/);
+    await u.click(screen.getByTestId('mode-play'));
+    await u.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByText(/麦克风校准/);
+    mic._set('running'); // 授权通过（校准页已 running）
+    await screen.findByText(/现在听到：-/);
+    // 双挂载发生在"开始练习"后的重渲染期间；跑完效应微任务队列，确认没提前结算
+    await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
+    // 仍在练习屏：实时听音指示器在位、倒计时 ≥60、无"本轮完成"
+    expect(await screen.findByTestId('mic-hud')).toBeInTheDocument();
+    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
+    expect(screen.queryByText('本轮完成')).toBeNull();
+    // 流未被误杀：mic.stop 不应被练习屏挂载路径调用（结算/离屏才 stop）
+    expect(mic.micStop).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => {
+    cleanup();
     mic._set('idle');
     mic.micStop.mockClear();
     mic.micRequest.mockClear();
