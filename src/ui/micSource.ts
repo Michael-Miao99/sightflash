@@ -55,38 +55,52 @@ function tick(): void {
   if (!ac || !analyser) return;
   rafId = requestAnimationFrame(tick);
   if (!handlers) return;
+  if (++frameNo % 3 !== 0) return; // 采样+YIN 只在消费帧算（约 48ms 一次 ≈ AnalyserNode 2048 窗长），省 3× CPU
   if (!sampleBuf) sampleBuf = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(sampleBuf);
   let acc = 0;
   for (let i = 0; i < sampleBuf.length; i++) acc += sampleBuf[i] * sampleBuf[i];
   const rms = Math.sqrt(acc / sampleBuf.length);
   const f0 = yinPitch(sampleBuf, ac.sampleRate);
-  if (++frameNo % 3 === 0) { // 约 48ms/帧喂起音门（≈ AnalyserNode 2048 窗长）
-    const evt = gate.feed(rms, f0);
-    if (evt) handlers.onOnset(evt);
-    handlers.onLevel(Math.min(1, rms * 3), f0 === null ? null : hzToMidi(f0));
-  }
+  const evt = gate.feed(rms, f0);
+  if (evt) handlers.onOnset(evt);
+  handlers.onLevel(Math.min(1, rms * 3), f0 === null ? null : hzToMidi(f0));
 }
 
 /**
- * 请求/授权麦克风并开流（用户手势内调用；已 running 幂等返回）。返回终态。
+ * 请求/授权麦克风并开流（用户手势内调用；running/requesting 幂等返回）。返回终态。
  * getUserMedia({echoCancellation:false,noiseSuppression:false,autoGainControl:false})——原声真琴判定。
  */
 export async function micRequest(): Promise<MicStatus> {
   if (status === 'running') return 'running';
+  const nav = navigator as Navigator & { mediaDevices?: MediaDevices };
+  const AC = audioCtxClass();
+  if (!nav.mediaDevices?.getUserMedia || !AC) {
+    setStatus('unsupported');
+    return 'unsupported';
+  }
+  if (status === 'requesting') return 'requesting'; // 已在请求中：避免重复弹授权（请求 #1 的终态会经订阅通知）
   setStatus('requesting');
+  // 授权请求前同步建 ctx 并尝试 resume：iOS Safari 须在用户手势内解锁 AudioContext
+  //（await gUM 后再建会脱离手势、可能永久 suspended 且让下方流程悬挂），失败不阻塞主流程。
+  let ctx: AudioContext;
   try {
-    const nav = navigator as Navigator & { mediaDevices?: MediaDevices };
-    const AC = audioCtxClass();
-    if (!nav.mediaDevices?.getUserMedia || !AC) {
-      setStatus('unsupported');
-      return 'unsupported';
-    }
+    ctx = new AC();
+  } catch {
+    setStatus('error');
+    return 'error';
+  }
+  void ctx.resume().catch(() => {});
+  try {
     const st = await nav.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
-    const ctx = new AC();
-    await ctx.resume();
+    // 等待期间已被 micStop/他处复位 → 丢弃迟到的授权流，避免孤儿 rAF 与麦克风指示灯常亮（§27.3）
+    if (micGetStatus() !== 'requesting') {
+      st.getTracks().forEach((t) => t.stop());
+      void ctx.close().catch(() => {});
+      return micGetStatus();
+    }
     const src = ctx.createMediaStreamSource(st);
     const an = ctx.createAnalyser();
     an.fftSize = 2048;
@@ -96,6 +110,7 @@ export async function micRequest(): Promise<MicStatus> {
     stream = st;
     gate.reset();
     frameNo = 0;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {}); // 兜底：connect 后仍 suspended 再试一次
     setStatus('running');
     // 流中断（后台/权限被撤）→ 立即释放，UI 订阅可感知并提前结算（§27.7）
     for (const t of st.getAudioTracks()) {
@@ -105,6 +120,7 @@ export async function micRequest(): Promise<MicStatus> {
     rafId = requestAnimationFrame(tick);
     return 'running';
   } catch (e) {
+    void ctx.close().catch(() => {});
     const name = (e as DOMException | undefined)?.name;
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') { setStatus('denied'); return 'denied'; }
     if (name === 'NotFoundError' || name === 'DevicesNotFoundError') { setStatus('unsupported'); return 'unsupported'; }
