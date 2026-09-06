@@ -14,9 +14,14 @@ export const THEMES: ThemeOption[] = [
   { id: 'classic', label: '经典深色' },
 ];
 
+/** 主题 id 判定（非串 / 非法值 → false） */
+function isThemeId(v: unknown): v is ThemeId {
+  return typeof v === 'string' && (THEME_IDS as readonly string[]).includes(v);
+}
+
 /** 任意值 → 合法主题；非法/空 → DEFAULT_THEME('paper')。老存档缺 theme 字段走这里回落。 */
 export function normalizeTheme(v: unknown): ThemeId {
-  return (THEME_IDS as readonly string[]).includes(v as string) ? (v as ThemeId) : DEFAULT_THEME;
+  return isThemeId(v) ? v : DEFAULT_THEME;
 }
 
 /** main.tsx render 前调用：读 localStorage 镜像设 <html data-theme>，保证首帧即正确底色。返回实际主题。 */
@@ -34,5 +39,5 @@ export function applyBootTheme(): ThemeId {
 export function mirrorTheme(t: ThemeId): void {
   try {
     if (localStorage.getItem(LS_THEME) !== t) localStorage.setItem(LS_THEME, t);
-  } catch { /* ignore */ }
+  } catch { /* 隐私/禁用时忽略 */ }
 }
