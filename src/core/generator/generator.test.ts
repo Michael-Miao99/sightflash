@@ -80,3 +80,70 @@ describe('generator 出题', () => {
     expect(hit).toBeLessThan(900);
   });
 });
+
+describe('stages chromatic 池（练黑键）', () => {
+  it('chromatic 池 = 自然前缀 ∪ 池内自然音上邻黑键（钉死不变量）', () => {
+    for (const clef of ['treble', 'bass'] as const) {
+      for (let s = 1; s <= MAX_STAGE; s++) {
+        const nat = poolForStage(s, clef);
+        if (nat.length === 0) continue; // 空池（低音 S1 未解锁）chromatic 亦空，不变量真空
+        const chrom = poolForStage(s, clef, 'chromatic');
+        // 升序、去重
+        expect(chrom).toEqual([...chrom].sort((a, b) => a - b));
+        expect(new Set(chrom).size).toBe(chrom.length);
+        // 上下界 = 自然池上下界（黑键不越界）
+        expect(chrom[0]).toBe(Math.min(...nat));
+        expect(chrom[chrom.length - 1]).toBe(Math.max(...nat));
+        // 自然前缀完整保留
+        for (const m of nat) expect(chrom).toContain(m);
+        // 池内黑键唯一来自其下方自然音（C/D/F/G/A 上邻），E/B 之上不产生黑键
+        for (const b of chrom) {
+          if ([1, 3, 6, 8, 10].includes(b % 12)) {
+            expect(nat).toContain(b - 1);
+            expect([0, 2, 5, 7, 9]).toContain((b - 1) % 12);
+          }
+        }
+      }
+    }
+  });
+
+  it('S1 高音 chromatic 只扩 C#4/D#4；S3 高音凑满一个整八度 C4~B4', () => {
+    expect(poolForStage(1, 'treble', 'chromatic')).toEqual([60, 61, 62, 63, 64]);
+    expect(poolForStage(3, 'treble', 'chromatic')).toEqual(
+      Array.from({ length: 12 }, (_, i) => 60 + i),
+    );
+  });
+});
+
+describe('generator 变化音出题', () => {
+  it('chromatic 黑键题带 acc(#/b 之一)、自然题无 acc', () => {
+    const rng = mulberry32(21);
+    const chrom = poolForStage(5, 'treble', 'chromatic');
+    const black = new Set(chrom.filter((m) => [1, 3, 6, 8, 10].includes(m % 12)));
+    const accSeen = new Set<string>();
+    let blackHit = 0;
+    for (let i = 0; i < 800; i++) {
+      const q = chooseQuestion(rng, 5, 'treble', {}, -1, 'chromatic');
+      expect(chrom).toContain(q.midi);
+      if (black.has(q.midi)) {
+        blackHit++;
+        expect(['#', 'b']).toContain(q.acc ?? '');
+        accSeen.add(q.acc as string);
+      } else {
+        expect(q.acc).toBeUndefined();
+      }
+    }
+    expect(blackHit).toBeGreaterThan(0);
+    expect(accSeen.has('#')).toBe(true);
+    expect(accSeen.has('b')).toBe(true);
+  });
+
+  it('缺省（natural）出题不含黑键、无 acc', () => {
+    const rng = mulberry32(4);
+    for (let i = 0; i < 60; i++) {
+      const q = chooseQuestion(rng, 5, 'treble', {}, -1);
+      expect([0, 2, 4, 5, 7, 9, 11]).toContain(q.midi % 12);
+      expect(q.acc).toBeUndefined();
+    }
+  });
+});
