@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { UserEvent } from '@testing-library/user-event';
 import { AppRoot } from './App';
 
 // jsdom 无 getUserMedia/AudioContext → UI 测试 mock micSource（浏览器胶水走真机验收 §27.8）。
@@ -95,3 +96,60 @@ describe('校准页路由与授权（§27.4，mock micSource）', () => {
     mic.micRequest.mockClear();
   });
 });
+
+describe('练习屏 play 版式与逃生（§27.5，mock micSource）', () => {
+  it('校准页点「开始」进入 play 练习：作答面板(音名板/仿真琴键)隐藏、实时听音指示器在位', async () => {
+    const u = userEvent.setup();
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    await u.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择模式/);
+    await u.click(screen.getByTestId('mode-play'));
+    await u.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByText(/麦克风校准/);
+    mic._set('running'); // 授权通过
+    await screen.findByText(/现在听到：-/);
+    await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
+    expect(await screen.findByTestId('staff')).toBeInTheDocument();
+    // play 作答面 = 麦克风：无 .note-btn / 无可点 .piano（仿真琴键隐藏）
+    expect(document.querySelectorAll('.note-btn')).toHaveLength(0);
+    expect(document.querySelector('.practice > .piano')).toBeNull();
+    // 实时听音指示器在位（音量条 + 音名）
+    expect(screen.getByTestId('mic-hud')).toBeInTheDocument();
+    expect(screen.getByTestId('live-name')).toHaveTextContent('现在听到：-');
+    // 初始待听引导
+    expect(screen.getByTestId('feedback')).toHaveTextContent(/对着麦克风/);
+    // 新题未判 → 逃生行不出现（[键位提示]/[下一题] 平时不占屏）
+    expect(screen.queryByTestId('escape-row')).toBeNull();
+  });
+
+  it('实时来音反映到指示器（模拟弹一个音）', async () => {
+    await goPlay(() => {});
+    mic._pushLevel(0.5, 60); // C4
+    expect(await screen.findByTestId('live-name')).toHaveTextContent('现在听到：C4');
+  });
+
+  afterEach(() => {
+    mic._set('idle');
+    mic.micStop.mockClear();
+    mic.micRequest.mockClear();
+  });
+});
+
+/** 进入 play 练习屏：home → 开始 → 跟弹 → 高音谱 → 授权 → 开始练习 */
+async function goPlay(onReady: () => void): Promise<UserEvent> {
+  const u = userEvent.setup();
+  render(<AppRoot repoKind="memory" />);
+  await screen.findByText(/五线速读/);
+  await u.click(screen.getByRole('button', { name: /开始训练/ }));
+  await screen.findByText(/选择模式/);
+  await u.click(screen.getByTestId('mode-play'));
+  await u.click(screen.getByRole('button', { name: /高音谱/ }));
+  await screen.findByText(/麦克风校准/);
+  mic._set('running');
+  await screen.findByText(/现在听到：-/);
+  await u.click(screen.getByRole('button', { name: /开始 \d+s 练习/ }));
+  await screen.findByTestId('staff');
+  onReady();
+  return u;
+}
