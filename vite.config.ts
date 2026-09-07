@@ -2,8 +2,8 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// 子路径部署（github.io Pages）：BASE_PATH 环境变量注入（见 scripts/deploy-pages.mjs）；
-// 缺省 '/' = 本地 dev / 隧道验收，行为不变。
+// github.io Pages 根路径部署（独立站，见 scripts/deploy-pages.mjs）：默认 base='/' 即产物直配根。
+// 保留 BASE_PATH 注入仅备未来迁回子路径场景；缺省行为不变（本地 dev / 隧道验收同 '/'）。
 const BASE = process.env.BASE_PATH ? `/${process.env.BASE_PATH.replace(/^\/+|\/+$/g, '')}/` : '/';
 
 export default defineConfig({

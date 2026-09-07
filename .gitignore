@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# GitHub Pages 部署 worktree（deploy-pages.mjs）
+.gh-pages-worktree/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
