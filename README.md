@@ -47,6 +47,13 @@ npm run build      # 产出 dist/（PWA）
 - [ ] 到点结算进结果页：开过跟弹记「跟弹」、纯认音记「认音」；数据页曲线与练习记录一致
 - [ ] 跟弹练习结束返回后浏览器麦克风指示灯熄灭（流已释放）；吵闹环境/踩踏板连音判定不疯跳（起音门抑制）
 
+## 里程碑 C（MIDI 键盘，§29）
+> MIDI 作答需 **Web MIDI 浏览器**：桌面 Chrome/Edge 或 **Android Chrome**（OTG 线/蓝牙接键盘）；iPhone Safari 不支持 → 设置页显示不可用、跟弹走麦克风。线上 https 入口即可用（Web MIDI 属安全上下文能力）。
+- 设置页「MIDI 键盘（跟弹优先）」：Android/桌面 Chrome 点「连接 MIDI 键盘」→ 显示「已连接 · 设备名」；iPhone 显示「此浏览器不支持」
+- 开跟弹（或沿用上次开着进入）：出现「MIDI 键盘作答 · 设备名」指示，麦克风不启动（无授权弹窗）；MIDI 弹谱面音 → 绿✓ 停留换题、弹错 ✗ 逃生照常
+- 跟弹中拔掉键盘 → 自动提示「已切回麦克风」并续弹（不误关、不提前结算）；重插键盘后下一轮开跟弹自动用回 MIDI
+- 无 MIDI 键盘时一切与里程碑 B 相同（麦克风回落路径）
+
 ## 里程碑 B 接入点
 - `src/core/generator`（chooseQuestion）已产出 `{midi, clef}` —— 跟弹直接复用
 - `src/core/session.ts` 状态机：统一首击入口 `answerFirstShot(s, {kind:'onset'|'key'|'pc'})`（±30¢ 音高 / 音级两档判定，同一首击状态机；认音仍走 `answerTap`/`answerKey`）

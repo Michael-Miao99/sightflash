@@ -16,6 +16,8 @@ export interface SeedState {
   followPlay?: boolean;
   /** 麦克风灵敏度（settings.micSens，老板可调）测试覆盖用 */
   micSens?: number;
+  /** 跟弹输入偏好 MIDI（settings.midiPrefer，§29）测试覆盖用 */
+  midiPrefer?: boolean;
 }
 
 export function seededState(seed?: SeedState): AppState {
@@ -29,6 +31,7 @@ export function seededState(seed?: SeedState): AppState {
       lastClef: seed.lastClef ?? def.settings.lastClef,
       followPlay: seed.followPlay ?? def.settings.followPlay,
       micSens: seed.micSens ?? def.settings.micSens,
+      midiPrefer: seed.midiPrefer ?? def.settings.midiPrefer,
     },
   };
 }

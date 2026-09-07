@@ -38,9 +38,46 @@ vi.mock('../ui/micSource', () => ({
   micStop: mic.micStop,
   micSetGateSens: mic.micSetGateSens,
 }));
+// MIDI 源假件（§29）：仿 mic。状态 + supported 开关 + note-on 注入；request 在 supported 时就绪即 running
+//（Web MIDI 无授权弹窗的同步成功语义），否则复位 idle——Practice 只在 supported 时才 request。
+const midi = vi.hoisted(() => {
+  let status: string = 'idle';
+  let supported = false;
+  const subs = new Set<() => void>();
+  let handler: { onOnset(e: { midi: number; cents: number }): void } | null = null;
+  return {
+    _supported(v: boolean) { supported = v; },
+    _set(s: string) { status = s; subs.forEach((l) => l()); },
+    _pushOnset(midi: number, cents: number) { handler?.onOnset({ midi, cents }); },
+    midiGetStatus: () => status,
+    midiIsSupported: () => supported,
+    midiGetDeviceName: () => '测试键盘',
+    midiSubscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
+    midiSetHandlers: (h: typeof handler) => { handler = h; },
+    midiRequest: vi.fn(async () => {
+      if (status !== 'running') status = supported && status !== 'denied' ? 'running' : 'idle';
+      subs.forEach((l) => l());
+      return status;
+    }),
+    midiStop: vi.fn(() => { status = 'idle'; subs.forEach((l) => l()); }),
+  };
+});
+vi.mock('../ui/midiSource', () => ({
+  midiGetStatus: midi.midiGetStatus,
+  midiIsSupported: midi.midiIsSupported,
+  midiGetDeviceName: midi.midiGetDeviceName,
+  midiSubscribe: midi.midiSubscribe,
+  midiSetHandlers: midi.midiSetHandlers,
+  midiRequest: midi.midiRequest,
+  midiStop: midi.midiStop,
+}));
 // 顶层清 spy：各 describe 局部 afterEach 之外，防调用计数跨用例泄漏
 afterEach(() => {
   mic.micSetGateSens.mockClear();
+  midi.midiRequest.mockClear();
+  midi.midiStop.mockClear();
+  midi._supported(false);
+  midi._set('idle');
 });
 
 /** 从首页走到练习屏（选谱号直进，§28：无模式分段/校准页） */
@@ -322,6 +359,81 @@ describe('StrictMode 开发态不误杀（§28）', () => {
     expect(toggleChecked()).toBe(true);
     expect(screen.getByTestId('feedback')).toBeInTheDocument();
     expect(screen.queryByText('本轮完成')).toBeNull();
+  });
+
+  afterEach(() => {
+    cleanup();
+    mic._set('idle');
+    mic.micStop.mockClear();
+    mic.micRequest.mockClear();
+  });
+});
+
+describe('MIDI 键盘源：跟弹自动优先用 MIDI（§29，mock midiSource）', () => {
+  /** 以 seed 直进练习屏 */
+  async function enterPractice(seed: { midiPrefer?: boolean; followPlay?: boolean }): Promise<UserEvent> {
+    const u = userEvent.setup();
+    render(<AppRoot repoKind="memory" seed={seed} />);
+    await screen.findByText(/五线速读/);
+    await u.click(screen.getByRole('button', { name: /开始训练/ }));
+    await screen.findByText(/选择谱号/);
+    await u.click(screen.getByRole('button', { name: /高音谱/ }));
+    await screen.findByTestId('staff');
+    return u;
+  }
+
+  it('偏好 MIDI 且设备可用 → 开跟弹即用 MIDI、麦克风不启动；note-on 直达判分', async () => {
+    midi._supported(true);
+    const u = await enterPractice({ midiPrefer: true });
+    await u.click(screen.getByTestId('mic-toggle'));
+    await act(async () => { await Promise.resolve(); }); // flush midiRequest 续体
+    expect(midi.midiRequest).toHaveBeenCalledTimes(1);
+    expect(mic.micRequest).not.toHaveBeenCalled(); // 双源互斥：用 MIDI 不启动麦（防电钢外放双触发）
+    expect(toggleChecked()).toBe(true);
+    expect(screen.getByTestId('midi-on')).toHaveTextContent(/MIDI 键盘作答/);
+    await act(async () => { midi._pushOnset(21, 0); }); // 弹远音 21 → 首击错 → 逃生揭晓
+    expect(screen.getByTestId('feedback').textContent).toMatch(/✗ 是 [A-G]\d/);
+    expect(screen.getByTestId('escape-row')).toBeInTheDocument();
+  });
+
+  it('偏好 MIDI 但设备不支持/无 → 不请求 MIDI、回落麦克风', async () => {
+    const u = await enterPractice({ midiPrefer: true }); // midiIsSupported 默认 false（jsdom/无 Web MIDI）
+    await u.click(screen.getByTestId('mic-toggle'));
+    await act(async () => { await Promise.resolve(); });
+    expect(midi.midiRequest).not.toHaveBeenCalled();
+    expect(mic.micRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('midi-on')).toBeNull();
+    await act(async () => { mic._set('running'); });
+    expect(toggleChecked()).toBe(true);
+    expect(mic.micRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('MIDI 作答中设备断开 → 自动回落麦克风，跟弹保持开、不误关不结算', async () => {
+    midi._supported(true);
+    const u = await enterPractice({ midiPrefer: true });
+    await u.click(screen.getByTestId('mic-toggle'));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('midi-on')).toBeInTheDocument();
+    await act(async () => { midi._set('idle'); }); // 设备拔掉（running → idle）
+    expect(screen.getByTestId('mic-msg')).toHaveTextContent(/已切回麦克风/);
+    expect(mic.micRequest).toHaveBeenCalled(); // 回落自动请求麦克风
+    expect(toggleChecked()).toBe(true); // 跟弹保持开
+    expect(screen.queryByTestId('midi-on')).toBeNull();
+    expect(screen.queryByText('本轮完成')).toBeNull(); // 不提前结算
+    await act(async () => { mic._set('running'); }); // 麦克风授权通过
+    expect(toggleChecked()).toBe(true);
+    await act(async () => { mic._pushOnset(21, 0); }); // 麦克风作答照常判
+    expect(screen.getByTestId('escape-row')).toBeInTheDocument();
+  });
+
+  it('未偏好 MIDI（默认）→ 跟弹不碰 MIDI，与既有麦克风行为一致', async () => {
+    const u = await enterPractice({});
+    await u.click(screen.getByTestId('mic-toggle'));
+    expect(midi.midiRequest).not.toHaveBeenCalled();
+    expect(mic.micRequest).toHaveBeenCalled();
+    await act(async () => { mic._set('running'); });
+    expect(toggleChecked()).toBe(true);
+    expect(screen.queryByTestId('midi-on')).toBeNull();
   });
 
   afterEach(() => {

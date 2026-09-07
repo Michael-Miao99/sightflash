@@ -42,6 +42,15 @@ describe('AppRoot', () => {
     expect(await screen.findByText(/清除本地数据/)).toBeInTheDocument();
   });
 
+  it('设置页含 MIDI 键盘块（jsdom 无 Web MIDI → 显示此浏览器不支持）', async () => {
+    render(<AppRoot repoKind="memory" />);
+    await screen.findByText(/五线速读/);
+    await userEvent.click(screen.getByRole('button', { name: /设置/ }));
+    await screen.findByText(/清除本地数据/);
+    expect(screen.getByText(/MIDI 键盘（跟弹优先）/)).toBeInTheDocument();
+    expect(screen.getByTestId('midi-state')).toHaveTextContent(/此浏览器不支持/);
+  });
+
   it('默认 natural：进入练习后音名板保持 7 键（与现状一致）', async () => {
     render(<AppRoot repoKind="memory" />);
     await screen.findByText(/五线速读/);

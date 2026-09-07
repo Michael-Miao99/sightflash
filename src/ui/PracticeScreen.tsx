@@ -13,6 +13,10 @@ import { NoteButton } from './NoteButton';
 import { Piano } from './Piano.tsx';
 import { useMicPitch } from './useMicPitch';
 import { micSetGateSens } from './micSource';
+import {
+  midiGetDeviceName, midiGetStatus, midiIsSupported, midiRequest, midiSetHandlers, midiStop, midiSubscribe,
+} from './midiSource';
+import type { MidiStatus } from './midiSource';
 import { AdvanceBlank } from './advanceBlank';
 import { sensToThresholds, DEFAULT_MIC_SENS, type OnsetEvent } from '../core/audio/onset';
 
@@ -69,6 +73,7 @@ export function PracticeScreen() {
   const holdTimer = useRef<number>(0);
   const everPlay = useRef(false); // 本轮是否开过跟弹（决定记录 mode=play）
   const wasRunning = useRef(false);
+  const prevMidi = useRef<MidiStatus>('idle'); // MIDI 源前一状态（断开回落判定，§29）
 
   // 换题消隐窗（§27 补）：判对推进/逃生换题后短窗内吞上一音余音起音（时序域，见 advanceBlank.ts）
   const blank = useRef(new AdvanceBlank());
@@ -83,14 +88,33 @@ export function PracticeScreen() {
     micSetGateSens(t.rmsOn, t.rmsOff);
   }
 
-  // 麦克风 handlers。真琴起音 → 统一首击判定（playOn 双保险：未开 / 关掉后模块不会来事件）
+  // 起音 handler 统一入口：麦克风与 MIDI 键盘都汇到这里 → 统一首击判定（双源互斥，任一时刻只一个在听）。
+  // playOn 双保险：未开 / 关掉后模块不会来事件
   function handleOnset(e: OnsetEvent) {
     if (!playOn || finished.current || holding.current) return;
     if (blank.current.blanked()) return; // 换题消隐窗内：旧音余音/重音头，非本题作答，丢弃
     const played = e.midi + e.cents / 100;
     submitFirst({ kind: 'onset', playedMidi: played }, false);
   }
+  // MIDI 的 handlers 只在 mount 挂一次 → 经 ref 读最新 handleOnset（useMicPitch 内部已自刷新，无需此层）
+  const onsetRef = useRef(handleOnset);
+  onsetRef.current = handleOnset;
   const mic = useMicPitch({ onOnset: handleOnset });
+
+  // ---- MIDI 键盘源（§29）：订阅状态 + 控制，仿 useMicPitch。running = 跟弹正用 MIDI 作答 ----
+  const [midiStatus, setMidiStatus] = useState<MidiStatus>(midiGetStatus);
+  useEffect(() => midiSubscribe(() => setMidiStatus(midiGetStatus())), []);
+  const midi = {
+    status: midiStatus,
+    request: async (): Promise<MidiStatus> => { await midiRequest(); const s = midiGetStatus(); setMidiStatus(s); return s; },
+    stop: () => { midiStop(); setMidiStatus(midiGetStatus()); },
+  };
+  const [srcMidi, setSrcMidi] = useState(false); // 本轮跟弹输入源是否为 MIDI（state 保证运行态渲染；决定断开回落方向）
+  const midiName = midiGetDeviceName(); // 供显示（midiOn 时才有意义）
+  useEffect(() => {
+    midiSetHandlers({ onOnset: (e) => onsetRef.current(e) }); // MIDI note-on 直达统一首击（§29）
+    return () => midiSetHandlers(null);
+  }, []);
 
   // 倒计时
   useEffect(() => {
@@ -106,18 +130,42 @@ export function PracticeScreen() {
     return () => clearInterval(t);
   }, [playOn]);
 
-  // 开关→授权（用户手势内）：开即 request；关即 stop。授权失败/流中断由状态订阅回弹开关（见下）
+  /** 启动本轮弹奏输入源（toggle / boot 唯一入口）：偏好 MIDI 且浏览器支持 → 先连 MIDI，成功即用它作答；
+   *  MIDI 不可用/无设备/被拒 → 回落麦克风。双源互斥：只启动一个，绝不双开（防电钢外放被麦双触发）。 */
+  async function startPlayback() {
+    const preferMidi = (state.settings.midiPrefer ?? false) && midiIsSupported();
+    if (preferMidi) {
+      const s = await midi.request();
+      if (s === 'running') {
+        setSrcMidi(true);
+        setMicMsg('');
+        return; // MIDI 键盘作答中；麦克风不启动
+      }
+      // MIDI 连不上（无设备/拒绝/错误）→ 落麦克风（原因文案由真机诊断；start 失败不打断作答）
+    }
+    setSrcMidi(false);
+    applyMicSens(); // 灵敏度阈值 → 起音门（老板可调；仅麦克风路径需要）
+    mic.request().catch(() => {}); // micSource 已吞错，兜底
+  }
+
+  /** 停用全部输入源（关跟弹 / 结算 / 卸载）。幂等。 */
+  function stopPlayback() {
+    mic.stop();
+    midi.stop();
+    setSrcMidi(false);
+  }
+
+  // 开关→启动（用户手势内）：开即启动源；关即全停。启动失败/流中断由状态订阅回弹开关（见下）
   function onToggleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const on = e.target.checked;
     if (finished.current) return;
     setPlayOn(on);
     // 记回 settings.followPlay：进练习屏默认沿用上次开关状态（§28 老板追加）
     setState((prev) => ({ ...prev, settings: { ...prev.settings, followPlay: on } }));
-    if (!on) { mic.stop(); setMicMsg(''); return; }
+    if (!on) { stopPlayback(); setMicMsg(''); return; }
     everPlay.current = true; // 开过即按 play 记录（§28 数据页）
     setMicMsg('');
-    applyMicSens(); // 灵敏度阈值 → 起音门（老板可调）
-    mic.request().catch(() => {}); // micSource 已吞错，兜底
+    void startPlayback();
   }
 
   // 开机默认沿用上次跟弹偏好（settings.followPlay，§28 老板追加）：mount 即自动请求授权。
@@ -127,8 +175,7 @@ export function PracticeScreen() {
     if (finished.current) return;
     if (!(state.settings.followPlay ?? false)) return;
     everPlay.current = true;
-    applyMicSens(); // 灵敏度阈值 → 起音门（老板可调）
-    mic.request().catch(() => {});
+    void startPlayback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -137,6 +184,7 @@ export function PracticeScreen() {
   // 不中断本轮认音（认音不依赖麦克风）。流中断不再提前结算（§28 取代旧 §27.7）。
   useEffect(() => {
     if (!playOn || finished.current) return;
+    if (srcMidi && midi.status === 'running') return; // §29 本轮用 MIDI：麦克风状态不仲裁（wasRunning 残留也不误回关）
     if (mic.status === 'running') { wasRunning.current = true; return; }
     if (mic.status === 'requesting') return; // 授权弹窗等待中
     if (mic.status === 'idle' && !wasRunning.current) return; // 请求尚未落定（idle→requesting 竞态），等下轮状态
@@ -152,13 +200,27 @@ export function PracticeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mic.status, playOn]);
 
+  // MIDI 运行中设备断开/出错 → 回落麦克风（§29：保持跟弹不中断，换源继续作答；不热切换新插设备，
+  // 下一轮开跟弹按最新设备重新选源）。麦克风启动失败由上方 mic 仲裁兜底回关提示。
+  useEffect(() => {
+    const prev = prevMidi.current;
+    prevMidi.current = midi.status;
+    if (finished.current || !playOn || !srcMidi) return;
+    if (prev === 'running' && midi.status !== 'running') {
+      setSrcMidi(false);
+      setMicMsg('MIDI 键盘断开，已切回麦克风作答');
+      mic.request().catch(() => {}); // 非手势下再授权：曾授过会直接成功；未授过则由 mic 仲裁回关
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [midi.status]);
+
   // 时间到 → 结算 → 落库（先落库成功再跳转，保证 ResultScreen 能读到最新记录）
   useEffect(() => {
     if (left > 0 || finished.current) return;
     finished.current = true;
     clearTimeout(holdTimer.current);
     holding.current = false;
-    mic.stop(); // 练习结束统一释放（幂等）
+    stopPlayback(); // 练习结束统一释放麦克风 + MIDI（幂等）
     const now = new Date();
     const { progress, streak, daily, record } = finalizeSession(state, {
       correct: sess.correct, total: sess.total, durationSec: cfg.durationSec,
@@ -174,9 +236,9 @@ export function PracticeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);
 
-  // 离开练习屏（结算跳 result / 其它卸载）统一停麦。StrictMode 首挂模拟卸载时未开麦，stop 幂等无害；
-  // 本版已无"校准页沿用流"，卸载停麦不会误杀任何继续使用的流（§28 取代旧沿用语义）。
-  useEffect(() => () => { clearTimeout(holdTimer.current); mic.stop(); }, []);
+  // 离开练习屏（结算跳 result / 其它卸载）统一停源。StrictMode 首挂模拟卸载时未开，stop 幂等无害；
+  // 本版已无"校准页沿用流"，卸载停麦不会误杀任何继续使用的流（§28 取代旧沿用语义）；MIDI 同由 stopPlayback 释放。
+  useEffect(() => () => { clearTimeout(holdTimer.current); stopPlayback(); }, []);
 
   // ---- 统一首击判分（§28）：只走 answerFirstShot 一处判题，ok 以返回会话定格为准 ----
   function submitFirst(src: FirstShotAnswer, wasOnset: boolean) {
@@ -249,7 +311,9 @@ export function PracticeScreen() {
   // 反馈派生（两种模式同一条逻辑，界面无差别）：判对停留中绿✓；last=对 → ✓；last=本题错 → ✗ 揭晓音名；其余引导
   const fbOk = flash || sess.last?.result === 'correct';
   const fbBad = !fbOk && sess.last?.result === 'wrong' && sess.last.expectedMidi === sess.target.midi;
-  const quietWarn = playOn && mic.status === 'running' && !finished.current && !fbOk && quiet >= 10;
+  const midiOn = playOn && srcMidi && midi.status === 'running'; // 本轮用 MIDI 键盘作答中（§29）
+  const hearing = midiOn || mic.status === 'running'; // 跟弹在听（任一生效源）
+  const quietWarn = playOn && hearing && !finished.current && !fbOk && quiet >= 10;
 
   return (
     <main className="screen practice">
@@ -266,6 +330,7 @@ export function PracticeScreen() {
         </span>
       </div>
       {micMsg && <div className="mic-msg" data-testid="mic-msg">{micMsg}</div>}
+      {midiOn && <div className="mic-msg midi" data-testid="midi-on">MIDI 键盘作答{midiName ? ` · ${midiName}` : ''}</div>}
       {staff}
       <div className={`fb ${fbOk ? 'ok' : fbBad ? 'bad' : 'none'}`} data-testid="feedback">
         {fbOk ? '✓ 对！' : fbBad ? `✗ 是 ${spelledName(sess.target.midi, sess.target.acc)}` : IDLE_HINT}

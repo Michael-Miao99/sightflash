@@ -212,6 +212,7 @@ button.danger { color: var(--danger-text); border-color: var(--danger-bd); }
 /* 麦克风授权失败/中断的临时提示（§28：只提示、不打断认音） */
 .mic-msg { text-align: center; color: var(--danger-text); font-size: .85rem; min-height: 1.1em;
   margin: 0 0 2px; flex: none; }
+.mic-msg.midi { color: var(--accent); } /* §29 MIDI 键盘作答中的中性指示（非错误） */
 .no-answer { text-align: center; color: var(--text-dim); font-size: .9rem; min-height: 1.2em; }
 /* 逃生行（play：首击判错停留后出现） */
 .escape-row { display: flex; justify-content: center; gap: 8px; align-items: center;

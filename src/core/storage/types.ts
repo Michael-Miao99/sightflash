@@ -23,6 +23,8 @@ export interface Settings {
   followPlay: boolean;
   /** 麦克风灵敏度（老板可调，0..100，§28 后追加）：0=最灵敏、100=最钝；缺省 DEFAULT_MIC_SENS（onset.ts） */
   micSens: number;
+  /** 跟弹输入偏好 MIDI（§29）：设置页连接过 MIDI 键盘后置 true → 跟弹开自动优先用 MIDI 作答，无设备回落麦克风；缺省 false */
+  midiPrefer: boolean;
 }
 
 export interface Streak {

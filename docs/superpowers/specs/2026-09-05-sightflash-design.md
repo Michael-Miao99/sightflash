@@ -522,3 +522,28 @@ sightflash/                      ← my-projects 仓库下的独立子项目
 - 组件（`playFlow.test.tsx`，mock `micSource`，hoisted 假件 `micRequest`→'requesting'、`mic._set('running'/'denied'/'idle')`、`_pushOnset(midi,cents)`）：Setup 无模式段/校准页；认音默认界面元素全在、无 mic-hud；开关授权/拒权回关提示/中断回关不提前结算/关闭即停麦；首击弹错出逃生+揭晓音名；逃生与判对后消隐窗吞旧音起音；判对绿✓ + 停留窗吞紧随同键起音；屏上点按统一首击；StrictMode 双挂载不误杀。push 均须 `act(async()=>…)` 包裹，结尾等 400ms 让停留定时器在 act 内落定。
 - 真机验收（README §28 清单）：选谱号直进练习无模式段/校准页；开跟弹授权后界面与认音无差别、不显示"现在听到/音量"；真琴弹对绿✓停留约 0.35s 换题、余音不误判；弹错 ✗ 停留可试对、[下一题] 可换题、低音 G2 重点试；跟弹开时屏上点按亦按首击；拒权/中断自动回关提示、本轮不提前结算；到点结算开过跟弹记 play；返回后麦克风指示灯熄灭；吵闹/踏板连音不疯跳。
 - 门禁：vitest 全量（`--maxWorkers=1`，OOM 时 `NODE_OPTIONS=--max-old-space-size=4096`）＋ `npx tsc -b` ＋ `npm run build`。
+
+---
+
+## 29 MIDI 键盘连接（跟弹第二输入源，2026-09-07）
+
+**目标与平台（老板选型）：** Android 手机（Android Chrome 支持 Web MIDI）经 OTG/蓝牙接 MIDI 键盘弹奏作答；**iPhone Safari 不支持 Web MIDI**（线上 iPhone 入口保持麦克风跟弹）。桌面 Chrome/Edge 亦可用。跟弹输入源策略老板定「**自动优先用 MIDI**」：设置页连过 MIDI 键盘后（`Settings.midiPrefer`），跟弹开自动用它；无设备/不支持回落麦克风；屏面不加控件、保持 §28 界面无差别。
+
+### 29.1 midiSource.ts（浏览器胶水，模块级单例，仿 micSource；无 jsdom 单测、精读 + 真机验）
+- `midiIsSupported()`：`'requestMIDIAccess' in navigator`（iOS Safari / jsdom false）。`midiRequest()`：`requestMIDIAccess({sysex:false})` → 枚举 `access.inputs` 取**第一个已连接输入** → `onmidimessage` 里 **note-on（0x90 & vel>0）即一次性起音** `{midi, cents:0}` 经 `midiSetHandlers` 的 `onOnset` 送判题。**无能量门/音高检测**——比麦克风干净（无噪声/无检测误差/无八度歧义），note-off（0x80 或 0x90+vel0）无需处理。
+- 无授权弹窗、通常同步成功（requesting 是瞬时态）；`midiStop()` 清监听复位 idle（保留 handlers 供下次 attach 沿用）；设备拔掉（当前 input `state→disconnected`）触发其 `onstatechange` → 自动 `midiStop()`，订阅方回落。running 幂等；请求中重复幂等返回。
+- 断开后**不热切换新插设备**：下一轮开跟弹按最新设备重新选源（避免运行中突然停麦改源）。
+
+### 29.2 输入源仲裁（PracticeScreen）
+- `startPlayback()`（toggle on / boot 唯一入口）：`preferMidi = settings.midiPrefer && midiIsSupported()`；preferMidi → 先 `midiRequest()`，成功（running）即 `setSrcMidi(true)`、**麦克风不启动**（双源互斥，防电钢外放被麦双触发）；失败/不支持 → 回落麦克风（`applyMicSens()` + `mic.request()`）。
+- `srcMidi` 用 **state 而非 ref**（运行态渲染需要）：MIDI 作答中屏上显示 `mic-msg.midi`「MIDI 键盘作答 · 设备名」；mic 仲裁 effect 加守卫——`srcMidi && midi.status==='running'` 时麦克风状态不仲裁（防 wasRunning 残留误回关）。
+- 回落 effect（订阅 `midi.status`，`prevMidi` ref 判前一态）：运行中 `running → 非 running`（设备断开/出错）→ `setSrcMidi(false)` + `mic-msg` 提示「已切回麦克风」+ 自动 `mic.request()`（曾授过直接成功；未授过由 mic 仲裁兜底回关），**跟弹保持开、不误关不提前结算**。
+- `stopPlayback()`（关跟弹 / 到点结算 / 卸载）统一停两源。MIDI note-on 与麦克风 onset **共用 `handleOnset` → `answerFirstShot` 全链路**（判对停留/消隐/逃生/首击语义零改动）。
+
+### 29.3 设置页 MIDI 块（mic-sens 同款布局）
+状态标签 + 动作：不支持 →「此浏览器不支持（iPhone Safari 不支持 MIDI）」；未连接 →「连接 MIDI 键盘」（连接成功即 `settings.midiPrefer = true` 持久化）；已连接 → 设备名 +「断开」（`midiStop` + `midiPrefer = false`）。存储 `Settings.midiPrefer`（缺省 false；老档读取兜底 `?? false`）。
+
+### 29.4 测试与验收
+- 组件（`playFlow.test.tsx` 增 mock `midiSource`，hoisted：`midiIsSupported` 默认 false 保既有用例回归；`_supported(true)` 开启、`_set(idle)` 模拟断开、`_pushOnset(midi,cents)` 注入 note-on）：设备可用 → 开跟弹用 MIDI 且 mic 不启动、note-on 直达判分；设备不支持 → 不请求 MIDI、回落麦克风；作答中断开 → 回落麦克风、跟弹保持开不误关不结算、麦克风作答照常；未偏好 → 与既有麦克风一致。App.test：设置页 jsdom 无 Web MIDI 显示不支持。
+- 门禁：vitest 全量 155 + `npx tsc -b` + `npm run build`。
+- 真机验收（Android Chrome + MIDI 键盘，README §29 清单补充）：设置页连接显示设备名；开跟弹出现「MIDI 键盘作答」指示且麦克风未请求（无授权弹窗）；MIDI 弹对绿✓停留换题、弹错 ✗ 逃生照常；拔键盘自动提示已切回麦克风、跟弹保持；重插后下一轮开跟弹自动用回 MIDI；Android OTG/蓝牙首次授权行为；iOS iPhone 入口设置页显示不支持、跟弹纯麦克风。
