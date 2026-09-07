@@ -34,27 +34,6 @@
 
 ---
 
-## 🚀 本地开发
-
-```bash
-npm install
-npm run dev        # http://localhost:5173
-npm test           # vitest 全量（判题状态机 / 谱面 / 输入源仲裁）
-npm run build      # 产出 dist/（PWA）
-```
-
-TypeScript `strict` + `erasableSyntaxOnly`。麦克风 / MIDI / Service Worker 需 **https（安全上下文）** 或 localhost：本地 `npm run dev` 即可验收，真机远程验收见下文。
-
-## 📦 部署 GitHub Pages
-
-```bash
-npm run deploy:pages
-```
-
-产物构建后写入 `gh-pages` 分支并推送（根路径独立站，`main` 不受污染，`dist/` 与 `.gh-pages-worktree/` 均已忽略）。仓库须在 GitHub 开启 Pages：源 = `gh-pages` 分支 · `/ (root)`。
-
----
-
 ## 🧱 项目结构
 
 | 目录 / 文件 | 职责 |
@@ -66,31 +45,6 @@ npm run deploy:pages
 | `docs/superpowers/specs/` | 设计文档（§1–§29 里程碑推进记录） |
 
 技术栈：React 19 · Vite · TypeScript(strict) · vitest(jsdom) · vite-plugin-pwa(PWA) · idb(IndexedDB)。
-
----
-
-## 📋 真机自测清单
-
-> 真机验收需经 **https** 伺服构建产物（Service Worker 仅 production 生效），可 `npm run dev` 用 cloudflared 隧道，或直接打开线上 Pages。
-
-**认音**
-- [ ] 打开线上 https 页面 → 开始训练 → 选谱号进练习；谱面渲染正确、点音名判对 / 错、到点自动结算
-- [ ] 混合模式（S3 解锁后）：大谱表双行 + 大括号 + 双谱号同屏；换谱时仿真键盘不随谱移位（固定 C2–C6），中央 C 标 "C4"
-- [ ] 开「练黑键」：一轮内能碰到升降号、12 键音名板与琴键黑键都能答对；关掉回到 7 键纯自然音
-- [ ] 数据页：今日目标 / 连击跨天正确；速度曲线与错音分布与练习记录一致
-- [ ] 断网重开仍可用、数据不丢；安装为 PWA 后全屏横屏、无纵向滚动
-
-**跟弹（麦克风）**
-- [ ] 屏内开「跟弹」→ 授权后开关保持开，界面与认音无差别（不显示实时音名 / 音量）
-- [ ] 真琴弹对 → 绿 ✓ 停留约 0.35 s 再换题；余音不误判成下一题错
-- [ ] 弹错（含同音名高 / 低八度）→ ✗ 停留、可再弹试对（不扣分）、可换题；重点试低音 G2 不锁高一八度
-- [ ] 拒权 / 切后台中断 → 跟弹自动关回 + 提示，本轮认音不中断、不提前结算
-- [ ] 练习结束返回后麦克风指示灯熄灭（流已释放）
-
-**MIDI 键盘（Android Chrome / 桌面 Chrome·Edge）**
-- [ ] 设置页「连接 MIDI 键盘」→ 显示「已连接 · 设备名」；iPhone 显示「此浏览器不支持」
-- [ ] 开跟弹出现「MIDI 键盘作答 · 设备名」，麦克风不启动（无授权弹窗）；MIDI 弹谱面音判对换题照常
-- [ ] 跟弹中拔键盘 → 提示「已切回麦克风」并续弹（不误关、不提前结算）；重插后下一轮自动用回 MIDI
 
 ---
 
