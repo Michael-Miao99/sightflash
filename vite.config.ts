@@ -2,8 +2,9 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// github.io Pages 根路径部署（独立站，见 scripts/deploy-pages.mjs）：默认 base='/' 即产物直配根。
-// 保留 BASE_PATH 注入仅备未来迁回子路径场景；缺省行为不变（本地 dev / 隧道验收同 '/'）。
+// github.io Pages project 站点部署（URL 恒带仓库名前缀 /sightflash/）：BASE_PATH=/sightflash/ 由
+// scripts/deploy-pages.mjs 注入，设 vite base 使产物资源引用 /sightflash/assets/… 与站点 URL 匹配。
+// 缺省 '/' = 本地 dev / 隧道验收，行为不变。
 const BASE = process.env.BASE_PATH ? `/${process.env.BASE_PATH.replace(/^\/+|\/+$/g, '')}/` : '/';
 
 export default defineConfig({

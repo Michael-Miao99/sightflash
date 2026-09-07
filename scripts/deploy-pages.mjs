@@ -1,7 +1,8 @@
-// SightFlash → GitHub Pages 发布（独立站，根路径 / 部署：https://michael-miao99.github.io/sightflash/）。
+// SightFlash → GitHub Pages 发布。project 站点 URL 恒带仓库名前缀 = https://michael-miao99.github.io/sightflash/
+// （独立 repo 不等于根路径；gh-pages 分支根被映射到 /sightflash/ 子路径）。
 // 用法：node scripts/deploy-pages.mjs   （幂等；首次自动建孤儿 gh-pages 分支，后续原地更新）
-// 原理：base='/' 构建（vite 默认）→ 组装独立 gh-pages 分支树（dist 产物平铺仓库根）→ push。
-//      main 分支不受污染（.gitignore 已忽略 dist/ 与 .gh-pages-worktree/）。
+// 原理：BASE_PATH=/sightflash/ 注入构建（vite.config 读它设 base，产物资源引用 /sightflash/assets/…）
+//      → 组装 gh-pages 分支树（dist 产物平铺分支根）→ push。main 不受污染（.gitignore 忽略 dist/ 与 .gh-pages-worktree/）。
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url)); // scripts
 const repo = join(here, '..'); // 独立仓根
+const PAGE_BASE = '/sightflash/'; // project Pages 子路径（gh-pages 根映射到该子路径）
 const GHP = 'gh-pages';
 const WT = join(repo, '.gh-pages-worktree');
 const DIST = join(repo, 'dist');
@@ -31,9 +33,9 @@ function git(args) {
 }
 const gitOk = (args) => spawnSync('git', ['-C', repo, ...args], { stdio: 'ignore' }).status === 0;
 
-// 1) 根路径构建（独立站 base='/'，无需 BASE_PATH）
-console.log('[deploy] 构建 (base=/)…');
-run('npm', ['run', 'build'], { cwd: repo });
+// 1) 子路径构建（vite.config 读 BASE_PATH 注入 base=PAGE_BASE）
+console.log(`[deploy] 构建 (base=${PAGE_BASE})…`);
+run('npm', ['run', 'build'], { cwd: repo, env: { ...process.env, BASE_PATH: PAGE_BASE } });
 if (!existsSync(join(DIST, 'index.html'))) {
   console.error('[deploy] 构建未产出 index.html，中止');
   process.exit(1);
